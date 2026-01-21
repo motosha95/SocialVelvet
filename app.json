@@ -6,17 +6,37 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "splash": {
+      "image": "./src/assets/logo.png",
       "resizeMode": "contain",
       "backgroundColor": "#0B0F14"
     },
+    "icon": "./src/assets/logo.png",
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload profile pictures and event images.",
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos for profile pictures and event images."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#0B0F14"
-      }
-    }
+      },
+      "permissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA"
+      ]
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to upload images.",
+          "cameraPermission": "The app needs access to your camera to take photos."
+        }
+      ]
+    ]
   }
 }

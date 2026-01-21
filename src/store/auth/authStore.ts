@@ -21,6 +21,10 @@ export const useAuthStore = create<AuthStore>()(
         const res = await authApi.login({ email, password });
         set({ session: { accessToken: res.accessToken, userId: res.userId } });
       },
+      signUp: async (email: string, password: string, name: string) => {
+        const res = await authApi.register({ email, password, name });
+        set({ session: { accessToken: res.accessToken, userId: res.userId } });
+      },
       signOut: async () => {
         set({ session: null });
       },

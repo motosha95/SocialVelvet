@@ -1,13 +1,19 @@
 import React from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
+import { Logo } from '../../../components/ui/Logo';
 import { useTheme } from '../../../theme/useTheme';
 import { useAuthStore } from '../../../store/auth/authStore';
+import type { AuthStackParamList } from '../../../navigation/types';
+import { Routes } from '../../../navigation/routes';
 
-export const LoginScreen = (): React.JSX.Element => {
+type Props = NativeStackScreenProps<AuthStackParamList, typeof Routes.Auth.Login>;
+
+export const LoginScreen = ({ navigation }: Props): React.JSX.Element => {
   const theme = useTheme();
   const signIn = useAuthStore((s) => s.signIn);
 
@@ -50,8 +56,17 @@ export const LoginScreen = (): React.JSX.Element => {
         marginTop: theme.spacing.sm,
         color: theme.colors.danger,
       },
+      footer: {
+        marginTop: theme.spacing.md,
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: theme.spacing.xs,
+      },
+      link: {
+        color: theme.colors.primary,
+      },
     });
-  }, [isSubmitting, theme.colors.background, theme.colors.border, theme.colors.danger, theme.colors.surface, theme.colors.text, theme.spacing.lg, theme.spacing.md, theme.spacing.sm, theme.spacing.xs]);
+  }, [isSubmitting, theme.colors.background, theme.colors.border, theme.colors.danger, theme.colors.primary, theme.colors.surface, theme.colors.text, theme.spacing.lg, theme.spacing.md, theme.spacing.sm, theme.spacing.xs]);
 
   const onSubmit = async (): Promise<void> => {
     setError(null);
@@ -68,6 +83,7 @@ export const LoginScreen = (): React.JSX.Element => {
 
   return (
     <Screen>
+      <Logo size={100} style={{ marginTop: theme.spacing.md, marginBottom: theme.spacing.lg }} />
       <View style={styles.header}>
         <AppText variant="title">Welcome back</AppText>
         <AppText color="muted">Sign in to see events and messages.</AppText>
@@ -105,6 +121,13 @@ export const LoginScreen = (): React.JSX.Element => {
         <Button label={isSubmitting ? 'Signing in…' : 'Sign in'} onPress={onSubmit} style={styles.cta} />
 
         {error ? <AppText style={styles.error}>{error}</AppText> : null}
+
+        <View style={styles.footer}>
+          <AppText color="muted">Don't have an account? </AppText>
+          <AppText style={styles.link} onPress={() => navigation.navigate(Routes.Auth.Register)}>
+            Sign up
+          </AppText>
+        </View>
       </View>
     </Screen>
   );

@@ -1,34 +1,18 @@
 import React from 'react';
 import { NavigationContainer, type Theme as NavTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StyleSheet, ViewStyle } from 'react-native';
 
 import { useTheme } from '../theme/useTheme';
 import { useAuthStore } from '../store/auth/authStore';
 import type { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabs } from './MainTabs';
-import { Screen } from '../components/layout/Screen';
-import { AppText } from '../components/ui/AppText';
 
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 
 export const AppNavigator = (): React.JSX.Element => {
   const theme = useTheme();
   const session = useAuthStore((s) => s.session);
-  const hasHydrated = useAuthStore((s) => s.hasHydrated);
-
-  const styles = React.useMemo(() => {
-    return StyleSheet.create({
-      splash: {
-        justifyContent: 'center',
-        alignItems: 'center',
-      } satisfies ViewStyle,
-      splashSubtitle: {
-        marginTop: theme.spacing.sm,
-      },
-    });
-  }, [theme.spacing.sm]);
 
   const navTheme = React.useMemo<NavTheme>(() => {
     return {
@@ -61,17 +45,6 @@ export const AppNavigator = (): React.JSX.Element => {
       },
     };
   }, [theme.colors.background, theme.colors.border, theme.colors.primary, theme.colors.surface, theme.colors.text, theme.mode, theme.typography.fontMedium, theme.typography.fontRegular]);
-
-  if (!hasHydrated) {
-    return (
-      <Screen style={styles.splash}>
-        <AppText variant="title">Loading…</AppText>
-        <AppText color="muted" style={styles.splashSubtitle}>
-          Restoring session
-        </AppText>
-      </Screen>
-    );
-  }
 
   return (
     <NavigationContainer theme={navTheme}>

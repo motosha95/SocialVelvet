@@ -4,36 +4,55 @@ import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
 import { AppText } from './AppText';
 
-type ButtonVariant = 'primary' | 'danger';
+type ButtonVariant = 'primary' | 'danger' | 'secondary';
+type ButtonSize = 'small' | 'medium' | 'large';
 
 interface ButtonProps {
   label: string;
   onPress: () => void;
   variant?: ButtonVariant;
+  size?: ButtonSize;
   style?: ViewStyle;
 }
 
-export const Button = ({ label, onPress, variant = 'primary', style }: ButtonProps): React.JSX.Element => {
+export const Button = ({ label, onPress, variant = 'primary', size = 'medium', style }: ButtonProps): React.JSX.Element => {
   const theme = useTheme();
 
   const styles = React.useMemo(() => {
-    const backgroundColor = variant === 'danger' ? theme.colors.danger : theme.colors.primary;
+    let backgroundColor: string;
+    let textColor: string;
+    
+    if (variant === 'danger') {
+      backgroundColor = theme.colors.danger;
+      textColor = theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF';
+    } else if (variant === 'secondary') {
+      backgroundColor = theme.colors.border;
+      textColor = theme.colors.text;
+    } else {
+      backgroundColor = theme.colors.primary;
+      textColor = theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF';
+    }
+
+    const paddingVertical = size === 'small' ? theme.spacing.xs : size === 'large' ? theme.spacing.md : theme.spacing.sm;
+    const paddingHorizontal = size === 'small' ? theme.spacing.sm : size === 'large' ? theme.spacing.lg : theme.spacing.md;
+    const fontSize = size === 'small' ? theme.typography.captionSize : size === 'large' ? theme.typography.bodySize : theme.typography.bodySize;
 
     return StyleSheet.create({
       root: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: theme.spacing.sm,
-        paddingHorizontal: theme.spacing.md,
-        borderRadius: 12,
+        paddingVertical,
+        paddingHorizontal,
+        borderRadius: size === 'small' ? 8 : 12,
         backgroundColor,
       },
       label: {
-        color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
+        color: textColor,
         fontWeight: '600',
+        fontSize,
       },
     });
-  }, [theme.colors.danger, theme.colors.primary, theme.mode, theme.spacing.md, theme.spacing.sm, variant]);
+  }, [theme.colors.danger, theme.colors.primary, theme.colors.border, theme.colors.text, theme.mode, theme.spacing, theme.typography, variant, size]);
 
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={[styles.root, style]}>

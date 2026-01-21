@@ -8,22 +8,23 @@ export interface ThemeColors {
   border: string;
 }
 
+// Brand colors based on logo: Vibrant red, cream/beige, black
 export const lightColors: ThemeColors = {
   background: '#FFFFFF',
-  surface: '#F6F7F9',
+  surface: '#FAFAFA',
   text: '#0B0F14',
   mutedText: '#5B6472',
-  primary: '#2D6CDF',
+  primary: '#DC2626', // Vibrant red from logo
   danger: '#D12C2C',
-  border: '#E3E7EE',
+  border: '#E5E5E5',
 };
 
 export const darkColors: ThemeColors = {
-  background: '#0B0F14',
-  surface: '#111823',
-  text: '#E9EEF6',
-  mutedText: '#A7B2C3',
-  primary: '#6FA3FF',
+  background: '#0B0F14', // Black background matching logo
+  surface: '#1A1A1A',
+  text: '#F5F5DC', // Cream/beige matching logo text
+  mutedText: '#A8A8A8',
+  primary: '#E63946', // Slightly brighter red for dark mode visibility
   danger: '#FF6B6B',
-  border: '#1E2A3A',
+  border: '#2A2A2A',
 };
