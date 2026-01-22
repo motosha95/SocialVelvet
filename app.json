@@ -16,7 +16,8 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload profile pictures and event images.",
-        "NSCameraUsageDescription": "This app needs access to your camera to take photos for profile pictures and event images."
+        "NSCameraUsageDescription": "This app needs access to your camera to take photos for profile pictures and event images.",
+        "NSLocationWhenInUseUsageDescription": "This app needs access to your location to help you set event locations."
       }
     },
     "android": {
@@ -26,7 +27,9 @@
       "permissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
       ],
       "usesCleartextTraffic": true
     },

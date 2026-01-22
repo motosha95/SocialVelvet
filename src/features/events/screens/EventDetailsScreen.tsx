@@ -8,6 +8,8 @@ import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
 import { EventImage } from '../../../components/ui/EventImage';
+import { DateDisplay } from '../../../components/ui/DateDisplay';
+import { LocationMap } from '../../../components/ui/LocationMap';
 import { useTheme } from '../../../theme/useTheme';
 import { useEventsStore } from '../../../store/events/eventsStore';
 import { eventsApi } from '../../../api/eventsApi';
@@ -49,13 +51,18 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   // Check if user can edit (organizer or co-host with permission)
   const canEdit = React.useMemo(() => {
     if (!event || !userId) return false;
-    // If canEdit is already set, use it
-    if (event.canEdit !== undefined) return event.canEdit;
-    // Otherwise check if user is organizer
+    // First check if user is organizer
     if (event.organizerId === userId) return true;
-    // Check if user is a co-host with edit permission
-    const coHost = coHosts.find((ch) => ch.userId === userId);
-    return coHost?.canEdit === true;
+    // Then check if user is a co-host with edit permission
+    // (This takes priority over event.canEdit because we load co-hosts separately)
+    if (coHosts.length > 0) {
+      const coHost = coHosts.find((ch) => ch.userId === userId);
+      if (coHost) {
+        return coHost.canEdit === true;
+      }
+    }
+    // Fallback to event.canEdit if co-hosts aren't loaded yet
+    return event.canEdit === true;
   }, [event, userId, coHosts]);
 
   const styles = React.useMemo(() => {
@@ -482,23 +489,17 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             Details
           </AppText>
           <View style={styles.card}>
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                📅
+            <View style={{ marginBottom: theme.spacing.md }}>
+              <AppText color="muted" variant="caption" style={{ marginBottom: theme.spacing.xs }}>
+                📅 Date & Time
               </AppText>
-              <AppText>{formatDate(event.date)}</AppText>
+              <DateDisplay date={event.date} mode="datetime" />
             </View>
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                🕐
+            <View>
+              <AppText color="muted" variant="caption" style={{ marginBottom: theme.spacing.xs }}>
+                📍 Location
               </AppText>
-              <AppText>{formatTime(event.date)}</AppText>
-            </View>
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                📍
-              </AppText>
-              <AppText>{event.location}</AppText>
+              <LocationMap location={event.location} height={200} />
             </View>
             <View style={styles.metaRow}>
               <AppText color="muted" variant="caption">

@@ -8,6 +8,8 @@ import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
+import { DatePicker } from '../../../components/ui/DatePicker';
+import { LocationPicker } from '../../../components/ui/LocationPicker';
 import { useTheme } from '../../../theme/useTheme';
 import { eventsApi } from '../../../api/eventsApi';
 import { uploadApi } from '../../../api/uploadApi';
@@ -24,8 +26,12 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [title, setTitle] = React.useState<string>('');
   const [description, setDescription] = React.useState<string>('');
   const [location, setLocation] = React.useState<string>('');
-  const [date, setDate] = React.useState<string>('');
-  const [time, setTime] = React.useState<string>('');
+  const [dateTime, setDateTime] = React.useState<Date>(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(18, 0, 0, 0);
+    return tomorrow;
+  });
   const [maxAttendees, setMaxAttendees] = React.useState<string>('');
   const [imageUri, setImageUri] = React.useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
@@ -120,30 +126,9 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
       setError('Location is required');
       return false;
     }
-    if (!date.trim()) {
-      setError('Date is required');
-      return false;
-    }
-    if (!time.trim()) {
-      setError('Time is required');
-      return false;
-    }
-
-    // Validate date format (YYYY-MM-DD)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
-      setError('Date must be in YYYY-MM-DD format');
-      return false;
-    }
-
-    // Validate time format (HH:MM)
-    if (!/^\d{2}:\d{2}$/.test(time.trim())) {
-      setError('Time must be in HH:MM format (24-hour)');
-      return false;
-    }
 
     // Validate date is not in the past
-    const eventDateTime = new Date(`${date}T${time}`);
-    if (eventDateTime < new Date()) {
+    if (dateTime < new Date()) {
       setError('Event date and time must be in the future');
       return false;
     }
@@ -216,7 +201,6 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
     setIsSubmitting(true);
 
     try {
-      const eventDateTime = new Date(`${date.trim()}T${time.trim()}`).toISOString();
       const createRequest: { 
         title: string; 
         description: string; 
@@ -228,7 +212,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         title: title.trim(),
         description: description.trim(),
         location: location.trim(),
-        date: eventDateTime,
+        date: dateTime.toISOString(),
       };
 
       if (maxAttendees.trim()) {
@@ -259,22 +243,6 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   };
 
 
-  // Set default date/time to tomorrow at 6 PM
-  React.useEffect(() => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    tomorrow.setHours(18, 0, 0, 0);
-
-    const defaultDate = tomorrow.toISOString().split('T')[0];
-    const defaultTime = `${String(tomorrow.getHours()).padStart(2, '0')}:${String(tomorrow.getMinutes()).padStart(2, '0')}`;
-
-    if (!date) {
-      setDate(defaultDate ?? '');
-    }
-    if (!time) {
-      setTime(defaultTime ?? '');
-    }
-  }, [date, time]);
 
   return (
     <Screen>
@@ -313,47 +281,20 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
             maxLength={1000}
           />
 
-          <AppText style={styles.fieldLabel} color="muted">
-            Location *
-          </AppText>
-          <TextInput
+          <LocationPicker
             value={location}
-            onChangeText={setLocation}
-            style={styles.input}
+            onChange={setLocation}
+            label="Location *"
             placeholder="123 Main St, City"
-            placeholderTextColor={theme.colors.mutedText}
-            editable={!isSubmitting}
-            maxLength={200}
           />
 
-          <View style={styles.row}>
-            <View style={styles.rowItem}>
-              <AppText style={styles.fieldLabel} color="muted">
-                Date * (YYYY-MM-DD)
-              </AppText>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                style={styles.input}
-                placeholder="2024-12-31"
-                placeholderTextColor={theme.colors.mutedText}
-                editable={!isSubmitting}
-              />
-            </View>
-            <View style={styles.rowItem}>
-              <AppText style={styles.fieldLabel} color="muted">
-                Time * (HH:MM)
-              </AppText>
-              <TextInput
-                value={time}
-                onChangeText={setTime}
-                style={styles.input}
-                placeholder="18:00"
-                placeholderTextColor={theme.colors.mutedText}
-                editable={!isSubmitting}
-              />
-            </View>
-          </View>
+          <DatePicker
+            value={dateTime}
+            onChange={setDateTime}
+            mode="datetime"
+            minimumDate={new Date()}
+            label="Date & Time *"
+          />
 
           <AppText style={styles.fieldLabel} color="muted">
             Event Image (optional)
