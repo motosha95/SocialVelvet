@@ -74,7 +74,18 @@ export const apiClient = {
       throw new Error(errorMessage);
     }
 
-    return await response.json();
+    // Handle 204 No Content (empty response) - common for join/leave operations
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    // Try to parse JSON, but handle empty responses gracefully
+    const text = await response.text();
+    if (!text) {
+      return undefined as T;
+    }
+
+    return JSON.parse(text) as T;
   },
 
   /**

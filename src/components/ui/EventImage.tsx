@@ -14,6 +14,7 @@ interface EventImageProps {
 
 export const EventImage = ({ imageUrl, style, imageStyle, aspectRatio = 16 / 9 }: EventImageProps): React.JSX.Element => {
   const theme = useTheme();
+  const [imageError, setImageError] = React.useState<boolean>(false);
   const imageSource = getEventImageSource(imageUrl);
 
   const styles = React.useMemo(() => {
@@ -42,7 +43,12 @@ export const EventImage = ({ imageUrl, style, imageStyle, aspectRatio = 16 / 9 }
     });
   }, [aspectRatio, theme.colors.border, theme.colors.mutedText]);
 
-  if (!imageSource) {
+  // Reset error state when imageUrl changes
+  React.useEffect(() => {
+    setImageError(false);
+  }, [imageUrl]);
+
+  if (!imageSource || imageError) {
     return (
       <View style={[styles.container, styles.placeholder, style]}>
         <AppText variant="caption" color="muted" style={styles.placeholderText}>
@@ -52,22 +58,26 @@ export const EventImage = ({ imageUrl, style, imageStyle, aspectRatio = 16 / 9 }
     );
   }
 
-  if (!imageSource) {
-    return (
-      <View style={[styles.container, styles.placeholder, style]}>
-        <AppText variant="caption" color="muted" style={styles.placeholderText}>
-          📸 No image
-        </AppText>
-      </View>
-    );
-  }
+  const handleImageError = (): void => {
+    console.warn('[EventImage] Failed to load image:', imageSource.uri || 'local image');
+    setImageError(true);
+  };
 
   return (
     <View style={[styles.container, style]}>
       {imageSource.uri ? (
-        <Image source={{ uri: imageSource.uri }} style={[styles.image, imageStyle]} />
+        <Image
+          source={{ uri: imageSource.uri }}
+          style={[styles.image, imageStyle]}
+          onError={handleImageError}
+          onLoadStart={() => setImageError(false)}
+        />
       ) : imageSource.source ? (
-        <Image source={imageSource.source} style={[styles.image, imageStyle]} />
+        <Image
+          source={imageSource.source}
+          style={[styles.image, imageStyle]}
+          onError={handleImageError}
+        />
       ) : (
         <View style={[styles.placeholder, imageStyle]}>
           <AppText variant="caption" color="muted" style={styles.placeholderText}>

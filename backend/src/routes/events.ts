@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { authenticate, type AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, type AuthRequest } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
 import { eventsService } from '../services/events';
 
@@ -34,7 +34,7 @@ const updateCoHostSchema = z.object({
 });
 
 // Get all events (public, but includes isJoined if authenticated)
-eventsRouter.get('/', async (req: AuthRequest, res, next) => {
+eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
     const userId = req.userId;
     const events = await eventsService.listEvents(userId);
@@ -45,7 +45,7 @@ eventsRouter.get('/', async (req: AuthRequest, res, next) => {
 });
 
 // Get event by ID (public, but includes isJoined if authenticated)
-eventsRouter.get('/:id', async (req: AuthRequest, res, next) => {
+eventsRouter.get('/:id', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
     const userId = req.userId;
     const includeCoHosts = req.query.includeCoHosts === 'true';
@@ -171,12 +171,10 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
 });
 
 // Get co-hosts (requires auth, only organizer)
-eventsRouter.get('/:id/co-hosts', authenticate, async (req: AuthRequest, res, next) => {
+eventsRouter.get('/:id/co-hosts', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
-    if (!req.userId) {
-      throw new AppError(401, 'Authentication required');
-    }
-
+    // Allow anyone to view co-hosts (public information)
+    // Only organizers can manage them, but everyone can see them
     const coHosts = await eventsService.getCoHosts(req.params.id, req.userId);
     res.json(coHosts);
   } catch (err) {

@@ -89,16 +89,12 @@ export const eventsService = {
             name: true,
           },
         },
-        attendees: userId
-          ? {
-              where: {
-                userId,
-              },
-              select: {
-                userId: true,
-              },
-            }
-          : true,
+        // Always fetch all attendees to get correct count, then check if user is joined
+        attendees: {
+          select: {
+            userId: true,
+          },
+        },
       },
       orderBy: {
         date: 'asc',
@@ -121,16 +117,12 @@ export const eventsService = {
             name: true,
           },
         },
-        attendees: userId
-          ? {
-              where: {
-                userId,
-              },
-              select: {
-                userId: true,
-              },
-            }
-          : true,
+        // Always fetch all attendees to get correct count, then check if user is joined
+        attendees: {
+          select: {
+            userId: true,
+          },
+        },
         coHosts: includeCoHosts && userId
           ? {
               include: {
@@ -456,7 +448,7 @@ export const eventsService = {
   /**
    * Get co-hosts for an event (only organizer can see this)
    */
-  getCoHosts: async (eventId: string, organizerId: string): Promise<EventCoHost[]> => {
+  getCoHosts: async (eventId: string, organizerId?: string): Promise<EventCoHost[]> => {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
     });
@@ -465,9 +457,8 @@ export const eventsService = {
       throw new Error('Event not found');
     }
 
-    if (event.organizerId !== organizerId) {
-      throw new Error('Only the organizer can view co-hosts');
-    }
+    // Allow anyone to view co-hosts (public information)
+    // Management operations still require organizer permissions
 
     const coHosts = await prisma.eventCoHost.findMany({
       where: { eventId },

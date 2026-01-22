@@ -6,6 +6,9 @@ export interface AuthRequest extends Request {
   userId?: string;
 }
 
+/**
+ * Required authentication middleware - returns 401 if no token
+ */
 export const authenticate = (req: AuthRequest, _res: Response, next: NextFunction): void => {
   try {
     const authHeader = req.headers.authorization;
@@ -40,5 +43,46 @@ export const authenticate = (req: AuthRequest, _res: Response, next: NextFunctio
     }
   } catch (err) {
     next(err);
+  }
+};
+
+/**
+ * Optional authentication middleware - sets userId if token is valid, but doesn't require it
+ */
+export const optionalAuthenticate = (req: AuthRequest, _res: Response, next: NextFunction): void => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    // If no auth header, continue without userId (public access)
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      req.userId = undefined;
+      next();
+      return;
+    }
+
+    const token = authHeader.substring(7);
+
+    if (!process.env.JWT_SECRET) {
+      console.error('JWT_SECRET not configured in environment variables');
+      // Continue without userId if JWT_SECRET is missing
+      req.userId = undefined;
+      next();
+      return;
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET) as { userId: string };
+      req.userId = decoded.userId;
+      next();
+    } catch (jwtError) {
+      // If token is invalid, continue without userId (don't fail the request)
+      // This allows public access while still using userId if token is valid
+      req.userId = undefined;
+      next();
+    }
+  } catch (err) {
+    // On any error, continue without userId
+    req.userId = undefined;
+    next();
   }
 };

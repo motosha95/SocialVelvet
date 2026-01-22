@@ -8,6 +8,7 @@ import { useThemeContext } from '../../../theme/ThemeProvider';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { useUserStore } from '../../../store/user/userStore';
 import { uploadApi } from '../../../api/uploadApi';
+import { fixAvatarUrl } from '../../../utils/avatarUtils';
 
 export const ProfileScreen = (): React.JSX.Element => {
   const { theme, setMode } = useThemeContext();
@@ -177,7 +178,7 @@ export const ProfileScreen = (): React.JSX.Element => {
           <TouchableOpacity onPress={handlePickImage} disabled={isUploading}>
             <View style={styles.avatar}>
               {profile?.avatarUrl ? (
-                <Image source={{ uri: profile.avatarUrl }} style={styles.avatarImage} />
+                <Image source={{ uri: fixAvatarUrl(profile.avatarUrl) || profile.avatarUrl }} style={styles.avatarImage} onError={() => console.warn('Failed to load avatar:', profile.avatarUrl)} />
               ) : (
                 <AppText variant="title">{profile?.name[0]?.toUpperCase()}</AppText>
               )}

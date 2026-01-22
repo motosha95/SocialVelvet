@@ -14,6 +14,7 @@ import { eventsApi } from '../../../api/eventsApi';
 import { useChatStore } from '../../../store/chat/chatStore';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { chatApi } from '../../../api/chatApi';
+import { fixAvatarUrl } from '../../../utils/avatarUtils';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
@@ -38,9 +39,11 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [isLoadingAttendees, setIsLoadingAttendees] = React.useState<boolean>(true);
   const [isLoadingCoHosts, setIsLoadingCoHosts] = React.useState<boolean>(false);
   const [isJoining, setIsJoining] = React.useState<boolean>(false);
+  const [isLeaving, setIsLeaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [menuVisible, setMenuVisible] = React.useState<boolean>(false);
   const [selectedCoHost, setSelectedCoHost] = React.useState<{ userId: string; canEdit: boolean } | null>(null);
+  const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
 
   // Check if user can edit (organizer or co-host with permission)
@@ -175,6 +178,17 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
       menuItemTextDanger: {
         color: theme.colors.danger,
       },
+      badge: {
+        backgroundColor: theme.colors.primary,
+        paddingHorizontal: theme.spacing.xs,
+        paddingVertical: 2,
+        borderRadius: 4,
+      },
+      badgeText: {
+        color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
+        fontSize: 10,
+        fontWeight: '600',
+      },
     });
   }, [theme]);
 
@@ -182,17 +196,15 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     const loadEvent = async (): Promise<void> => {
       if (event) {
         setIsLoadingEvent(false);
-        // Load co-hosts if user is organizer
-        if (event.organizerId === userId) {
-          setIsLoadingCoHosts(true);
-          try {
-            const loadedCoHosts = await eventsApi.getCoHosts(eventId);
-            setCoHosts(loadedCoHosts);
-          } catch (err) {
-            // Ignore errors - user might not be organizer
-          } finally {
-            setIsLoadingCoHosts(false);
-          }
+        // Load co-hosts for everyone (public information)
+        setIsLoadingCoHosts(true);
+        try {
+          const loadedCoHosts = await eventsApi.getCoHosts(eventId);
+          setCoHosts(loadedCoHosts);
+        } catch (err) {
+          // Ignore errors
+        } finally {
+          setIsLoadingCoHosts(false);
         }
         return;
       }
@@ -201,17 +213,15 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         const loadedEvent = await eventsApi.getById(eventId);
         if (loadedEvent) {
           setEvent(loadedEvent);
-          // Load co-hosts if user is organizer
-          if (loadedEvent.organizerId === userId) {
-            setIsLoadingCoHosts(true);
-            try {
-              const loadedCoHosts = await eventsApi.getCoHosts(eventId);
-              setCoHosts(loadedCoHosts);
-            } catch (err) {
-              // Ignore errors
-            } finally {
-              setIsLoadingCoHosts(false);
-            }
+          // Load co-hosts for everyone (public information)
+          setIsLoadingCoHosts(true);
+          try {
+            const loadedCoHosts = await eventsApi.getCoHosts(eventId);
+            setCoHosts(loadedCoHosts);
+          } catch (err) {
+            // Ignore errors
+          } finally {
+            setIsLoadingCoHosts(false);
           }
         } else {
           setError('Event not found');
@@ -241,43 +251,134 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     void loadAttendees();
   }, [eventId]);
 
-  // Update event when store changes
+  // Update event when store changes (but not if we just updated it from API or optimistically)
   React.useEffect(() => {
+    // Skip if we're currently joining/leaving (optimistic update in progress)
+    if (isJoining) {
+      return;
+    }
+    
+    // Skip if we just updated this event from API or optimistically (within last 15 seconds)
+    const timeSinceLastApiUpdate = Date.now() - lastApiUpdateRef.current;
+    if (timeSinceLastApiUpdate < 15000) {
+      return;
+    }
+    
     const updatedEvent = events.find((e) => e.id === eventId);
-    if (updatedEvent) {
+    if (updatedEvent && event) {
+      // CRITICAL: Don't override if the isJoined status would change
+      // This prevents store from reverting our optimistic update
+      if (updatedEvent.isJoined !== event.isJoined) {
+        // Store has different isJoined status - don't override optimistic update
+        return;
+      }
+      
+      // Only update if the store event is significantly different (different updatedAt)
+      // AND the store event is newer (has a more recent updatedAt)
+      const storeUpdatedAt = new Date(updatedEvent.updatedAt).getTime();
+      const localUpdatedAt = new Date(event.updatedAt).getTime();
+      
+      // Only update if store has newer data (more than 1000ms difference to avoid race conditions)
+      // AND the isJoined status matches (double check)
+      if (storeUpdatedAt > localUpdatedAt + 1000 && updatedEvent.isJoined === event.isJoined) {
+        setEvent(updatedEvent);
+      }
+    } else if (updatedEvent && !event) {
+      // If we don't have a local event yet, use the store event
       setEvent(updatedEvent);
     }
-  }, [events, eventId]);
+  }, [events, eventId, event, isJoining, isLeaving]);
 
   const handleJoin = async (): Promise<void> => {
     setIsJoining(true);
     setError(null);
 
+    // Set ref FIRST to prevent useEffect from overriding
+    lastApiUpdateRef.current = Date.now();
+
+    // Store the original event state for potential revert
+    const originalEvent = event;
+
+    // Optimistically update UI immediately
+    if (event) {
+      const optimisticEvent = {
+        ...event,
+        isJoined: true,
+        attendeeCount: (event.attendeeCount || 0) + 1,
+      };
+      setEvent(optimisticEvent);
+    }
+
     try {
       await joinEvent(eventId);
+      // Wait a bit for backend to process, then refresh event data
+      // This prevents getting stale data from the backend
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const updatedEvent = await eventsApi.getById(eventId);
+      if (updatedEvent && updatedEvent.isJoined === true) {
+        // Only update if backend confirms we're joined
+        lastApiUpdateRef.current = Date.now();
+        setEvent(updatedEvent);
+      }
       // Refresh attendees after joining
       const updatedAttendees = await eventsApi.getAttendees(eventId);
       setAttendees(updatedAttendees);
     } catch (err) {
+      // Revert optimistic update on error
+      if (originalEvent) {
+        setEvent(originalEvent);
+      }
       setError(err instanceof Error ? err.message : 'Failed to join event');
     } finally {
       setIsJoining(false);
+      setIsLeaving(false);
     }
   };
 
   const handleLeave = async (): Promise<void> => {
-    setIsJoining(true);
+    setIsLeaving(true);
+    setIsJoining(false);
     setError(null);
+
+    // Set ref FIRST to prevent useEffect from overriding
+    lastApiUpdateRef.current = Date.now();
+
+    // Store the original event state for potential revert
+    const originalEvent = event;
+
+    // Optimistically update UI immediately
+    if (event) {
+      const optimisticEvent = {
+        ...event,
+        isJoined: false,
+        attendeeCount: Math.max(0, (event.attendeeCount || 1) - 1),
+      };
+      setEvent(optimisticEvent);
+    }
 
     try {
       await leaveEvent(eventId);
+      // Wait a bit for backend to process, then refresh event data
+      // This prevents getting stale data from the backend
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const updatedEvent = await eventsApi.getById(eventId);
+      if (updatedEvent && updatedEvent.isJoined === false) {
+        // Only update if backend confirms we're not joined
+        lastApiUpdateRef.current = Date.now();
+        setEvent(updatedEvent);
+      }
       // Refresh attendees after leaving
       const updatedAttendees = await eventsApi.getAttendees(eventId);
       setAttendees(updatedAttendees);
     } catch (err) {
+      // Revert optimistic update on error
+      if (originalEvent) {
+        setEvent(originalEvent);
+      }
       setError(err instanceof Error ? err.message : 'Failed to leave event');
     } finally {
       setIsJoining(false);
+      setIsLeaving(false);
     }
   };
 
@@ -431,10 +532,18 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
               variant="secondary"
             />
           )}
-          {event.isJoined ? (
-            <Button label={isJoining ? 'Leaving...' : 'Leave event'} onPress={handleLeave} variant="danger" />
-          ) : (
-            <Button label={isJoining ? 'Joining...' : 'Join event'} onPress={handleJoin} />
+          {/* Don't show join/leave button if user is the organizer */}
+          {event.organizerId !== userId && (
+            event.isJoined ? (
+              <Button 
+                label={isLeaving ? 'Leaving...' : 'Leave event'} 
+                onPress={handleLeave} 
+                variant="secondary" 
+                size="small"
+              />
+            ) : (
+              <Button label={isJoining ? 'Joining...' : 'Join event'} onPress={handleJoin} />
+            )
           )}
         </View>
 
@@ -458,7 +567,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                     <View style={styles.attendeeCard}>
                       <View style={styles.avatar}>
                         {item.avatarUrl ? (
-                          <Image source={{ uri: item.avatarUrl }} style={styles.avatarImage} />
+                          <Image source={{ uri: fixAvatarUrl(item.avatarUrl) || item.avatarUrl }} style={styles.avatarImage} onError={() => console.warn('Failed to load attendee avatar:', item.avatarUrl)} />
                         ) : (
                           <AppText variant="caption" style={{ fontSize: 20 }}>
                             {item.name[0]?.toUpperCase()}
@@ -466,7 +575,19 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                         )}
                       </View>
                       <View style={styles.attendeeInfo}>
-                        <AppText>{item.name}</AppText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                          <AppText>{item.name}</AppText>
+                          {item.userId === event.organizerId && (
+                            <View style={styles.badge}>
+                              <AppText variant="caption" style={styles.badgeText}>Host</AppText>
+                            </View>
+                          )}
+                          {coHosts.some((ch) => ch.userId === item.userId) && (
+                            <View style={styles.badge}>
+                              <AppText variant="caption" style={styles.badgeText}>Co-Host</AppText>
+                            </View>
+                          )}
+                        </View>
                         <AppText color="muted" variant="caption">
                           Joined {new Date(item.joinedAt).toLocaleDateString()}
                         </AppText>
@@ -488,16 +609,22 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
           )}
         </View>
 
-        {/* Hosts Management (only visible to organizer) */}
-        {event.organizerId === userId && (
+        {/* Hosts Section (visible to everyone, management only for organizer) */}
+        {coHosts.length > 0 || event.organizerId === userId ? (
           <View style={styles.section}>
             <AppText variant="title" style={styles.sectionTitle}>
               Hosts ({coHosts.length + 1})
             </AppText>
             <View style={styles.card}>
-              <AppText color="muted" style={{ marginBottom: theme.spacing.sm }}>
-                Hosts can help manage your event. You can grant co-hosts permission to edit event details.
-              </AppText>
+              {event.organizerId === userId ? (
+                <AppText color="muted" style={{ marginBottom: theme.spacing.sm }}>
+                  Hosts can help manage your event. You can grant co-hosts permission to edit event details.
+                </AppText>
+              ) : (
+                <AppText color="muted" style={{ marginBottom: theme.spacing.sm }}>
+                  Event organizers and co-hosts.
+                </AppText>
+              )}
               {isLoadingCoHosts ? (
                 <View style={styles.loadingContainer}>
                   <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -526,7 +653,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                     <View style={styles.attendeeCard}>
                       <View style={styles.avatar}>
                         {item.userAvatarUrl ? (
-                          <Image source={{ uri: item.userAvatarUrl }} style={styles.avatarImage} />
+                          <Image source={{ uri: fixAvatarUrl(item.userAvatarUrl) || item.userAvatarUrl }} style={styles.avatarImage} onError={() => console.warn('Failed to load co-host avatar:', item.userAvatarUrl)} />
                         ) : (
                           <AppText variant="caption" style={{ fontSize: 20 }}>
                             {item.userName[0]?.toUpperCase()}
@@ -557,7 +684,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                               : 'View only'}
                         </AppText>
                       </View>
-                      {!item.isOrganizer && (
+                      {!item.isOrganizer && event.organizerId === userId && (
                         <TouchableOpacity
                           style={styles.menuButton}
                           onPress={() => {
@@ -573,35 +700,37 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                   scrollEnabled={false}
                 />
               )}
-              <Button
-                label="Add Co-Host"
-                onPress={async () => {
-                  // Show list of attendees who aren't hosts or co-hosts
-                  const availableAttendees = attendees.filter(
-                    (a) => a.userId !== event.organizerId && !coHosts.some((ch) => ch.userId === a.userId)
-                  );
-                  if (availableAttendees.length === 0) {
-                    Alert.alert('No Available Attendees', 'All attendees are already hosts or co-hosts.');
-                    return;
-                  }
-                  // For simplicity, add the first available attendee
-                  // In a real app, you'd show a picker/modal
-                  const attendeeToAdd = availableAttendees[0];
-                  try {
-                    await eventsApi.addCoHost(eventId, { userId: attendeeToAdd.userId, canEdit: true });
-                    // Reload co-hosts
-                    const updatedCoHosts = await eventsApi.getCoHosts(eventId);
-                    setCoHosts(updatedCoHosts);
-                  } catch (err) {
-                    Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add co-host');
-                  }
-                }}
-                variant="secondary"
-                style={{ marginTop: theme.spacing.sm }}
-              />
+              {event.organizerId === userId && (
+                <Button
+                  label="Add Co-Host"
+                  onPress={async () => {
+                    // Show list of attendees who aren't hosts or co-hosts
+                    const availableAttendees = attendees.filter(
+                      (a) => a.userId !== event.organizerId && !coHosts.some((ch) => ch.userId === a.userId)
+                    );
+                    if (availableAttendees.length === 0) {
+                      Alert.alert('No Available Attendees', 'All attendees are already hosts or co-hosts.');
+                      return;
+                    }
+                    // For simplicity, add the first available attendee
+                    // In a real app, you'd show a picker/modal
+                    const attendeeToAdd = availableAttendees[0];
+                    try {
+                      await eventsApi.addCoHost(eventId, { userId: attendeeToAdd.userId, canEdit: true });
+                      // Reload co-hosts
+                      const updatedCoHosts = await eventsApi.getCoHosts(eventId);
+                      setCoHosts(updatedCoHosts);
+                    } catch (err) {
+                      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to add co-host');
+                    }
+                  }}
+                  variant="secondary"
+                  style={{ marginTop: theme.spacing.sm }}
+                />
+              )}
             </View>
           </View>
-        )}
+        ) : null}
 
         {/* Co-Host Menu Modal */}
         <Modal

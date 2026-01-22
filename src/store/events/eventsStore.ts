@@ -46,12 +46,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   joinEvent: async (eventId: string) => {
     try {
       await eventsApi.join(eventId);
+      // Optimistically update the store, but the UI will refresh from API for accuracy
       const events = get().events.map((event) =>
         event.id === eventId
           ? {
               ...event,
               isJoined: true,
-              attendeeCount: event.attendeeCount + 1,
+              attendeeCount: Math.max(event.attendeeCount, (event.attendeeCount || 0) + 1),
             }
           : event
       );
@@ -66,12 +67,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   leaveEvent: async (eventId: string) => {
     try {
       await eventsApi.leave(eventId);
+      // Optimistically update the store, but the UI will refresh from API for accuracy
       const events = get().events.map((event) =>
         event.id === eventId
           ? {
               ...event,
               isJoined: false,
-              attendeeCount: Math.max(0, event.attendeeCount - 1),
+              attendeeCount: Math.max(0, (event.attendeeCount || 1) - 1),
             }
           : event
       );

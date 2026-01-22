@@ -87,9 +87,7 @@ export const eventsApi = {
 
   getCoHosts: async (eventId: string): Promise<EventCoHost[]> => {
     const token = getAuthToken();
-    if (!token) {
-      throw new Error('Authentication required');
-    }
+    // Token is optional - co-hosts are public information
     return await apiClient.get<EventCoHost[]>(`/events/${eventId}/co-hosts`, token);
   },
 
