@@ -13,9 +13,10 @@ interface ButtonProps {
   variant?: ButtonVariant;
   size?: ButtonSize;
   style?: ViewStyle;
+  disabled?: boolean;
 }
 
-export const Button = ({ label, onPress, variant = 'primary', size = 'medium', style }: ButtonProps): React.JSX.Element => {
+export const Button = ({ label, onPress, variant = 'primary', size = 'medium', style, disabled = false }: ButtonProps): React.JSX.Element => {
   const theme = useTheme();
 
   const styles = React.useMemo(() => {
@@ -44,7 +45,8 @@ export const Button = ({ label, onPress, variant = 'primary', size = 'medium', s
         paddingVertical,
         paddingHorizontal,
         borderRadius: size === 'small' ? 8 : 12,
-        backgroundColor,
+        backgroundColor: disabled ? theme.colors.mutedText : backgroundColor,
+        opacity: disabled ? 0.5 : 1,
       },
       label: {
         color: textColor,
@@ -52,10 +54,15 @@ export const Button = ({ label, onPress, variant = 'primary', size = 'medium', s
         fontSize,
       },
     });
-  }, [theme.colors.danger, theme.colors.primary, theme.colors.border, theme.colors.text, theme.mode, theme.spacing, theme.typography, variant, size]);
+  }, [theme.colors.danger, theme.colors.primary, theme.colors.border, theme.colors.text, theme.colors.mutedText, theme.mode, theme.spacing, theme.typography, variant, size, disabled]);
 
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={[styles.root, style]}>
+    <Pressable 
+      accessibilityRole="button" 
+      onPress={disabled ? undefined : onPress} 
+      style={[styles.root, style]}
+      disabled={disabled}
+    >
       <AppText style={styles.label}>{label}</AppText>
     </Pressable>
   );
