@@ -1,5 +1,6 @@
 import { prisma } from '../db/client';
 import type { Event, EventAttendee, EventCoHost } from '../types';
+import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
 
 export const eventsService = {
   /**
@@ -59,6 +60,9 @@ export const eventsService = {
       maxAttendees: prismaEvent.maxAttendees || undefined,
       isJoined,
       canEdit: userId ? canEdit : undefined,
+      seriesId: prismaEvent.seriesId || undefined,
+      seriesInterval: (prismaEvent.seriesInterval as SeriesInterval) || undefined,
+      seriesIndex: prismaEvent.seriesIndex !== null ? prismaEvent.seriesIndex : undefined,
       createdAt: prismaEvent.createdAt.toISOString(),
       updatedAt: prismaEvent.updatedAt.toISOString(),
     };
@@ -147,7 +151,7 @@ export const eventsService = {
   },
 
   /**
-   * Create event
+   * Create event (and series if specified)
    */
   createEvent: async (data: {
     title: string;
@@ -157,7 +161,118 @@ export const eventsService = {
     maxAttendees?: number;
     imageUrl?: string;
     organizerId: string;
+    seriesInterval?: SeriesInterval;
+    seriesCount?: number;
   }): Promise<Event> => {
+    // If series is specified, create multiple events
+    if (data.seriesInterval && data.seriesCount) {
+      const seriesDates = generateSeriesDates(data.date, data.seriesInterval, data.seriesCount);
+      
+      // Create all events in a transaction
+      const events = await prisma.$transaction(
+        seriesDates.map((eventDate, index) => {
+          const eventData: {
+            title: string;
+            description: string;
+            location: string;
+            date: Date;
+            organizerId: string;
+            seriesInterval: string;
+            seriesIndex: number;
+            maxAttendees?: number;
+            imageUrl?: string | null;
+          } = {
+            title: data.title,
+            description: data.description,
+            location: data.location,
+            date: eventDate,
+            organizerId: data.organizerId,
+            seriesInterval: data.seriesInterval,
+            seriesIndex: index,
+          };
+
+          if (data.maxAttendees !== undefined) {
+            eventData.maxAttendees = data.maxAttendees;
+          }
+
+          if (data.imageUrl !== undefined) {
+            eventData.imageUrl = data.imageUrl || null;
+          }
+
+          return prisma.event.create({
+            data: eventData,
+            include: {
+              organizer: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+              attendees: {
+                where: {
+                  userId: data.organizerId,
+                },
+                select: {
+                  userId: true,
+                },
+              },
+            },
+          });
+        })
+      );
+
+      // Update all events to use the first event's ID as seriesId
+      const firstEventId = events[0].id;
+      await prisma.event.updateMany({
+        where: {
+          id: {
+            in: events.map((e) => e.id),
+          },
+        },
+        data: {
+          seriesId: firstEventId,
+        },
+      });
+
+      // Refresh events to get updated seriesId
+      const updatedEvents = await prisma.event.findMany({
+        where: {
+          id: {
+            in: events.map((e) => e.id),
+          },
+        },
+        include: {
+          organizer: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          attendees: {
+            where: {
+              userId: data.organizerId,
+            },
+            select: {
+              userId: true,
+            },
+          },
+        },
+      });
+
+      // Auto-join organizer to all events in the series
+      await prisma.eventAttendee.createMany({
+        data: updatedEvents.map((event) => ({
+          userId: data.organizerId,
+          eventId: event.id,
+        })),
+        skipDuplicates: true,
+      });
+
+      // Return the first event
+      return eventsService.transformEvent(updatedEvents[0], data.organizerId);
+    }
+
+    // Single event creation (no series)
     const eventData: {
       title: string;
       description: string;
@@ -289,6 +404,7 @@ export const eventsService = {
 
   /**
    * Update event (requires permission)
+   * If updateAllFutureEvents is true and event is part of a series, updates all future events in the series
    */
   updateEvent: async (
     eventId: string,
@@ -300,12 +416,22 @@ export const eventsService = {
       date?: Date;
       maxAttendees?: number;
       imageUrl?: string;
-    }
+    },
+    updateAllFutureEvents: boolean = false
   ): Promise<Event> => {
     // Check permission
     const canEdit = await eventsService.canUserEditEvent(eventId, userId);
     if (!canEdit) {
       throw new Error('You do not have permission to edit this event');
+    }
+
+    // Get the current event to check if it's part of a series
+    const currentEvent = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!currentEvent) {
+      throw new Error('Event not found');
     }
 
     const updateData: any = {};
@@ -322,6 +448,36 @@ export const eventsService = {
     if (data.maxAttendees !== undefined) updateData.maxAttendees = data.maxAttendees;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl || null;
 
+    // If updateAllFutureEvents is true and event is part of a series, update all future events
+    if (updateAllFutureEvents && currentEvent.seriesId && currentEvent.seriesIndex !== null) {
+      // Find all events in the series with index greater than current event
+      const futureEvents = await prisma.event.findMany({
+        where: {
+          seriesId: currentEvent.seriesId,
+          seriesIndex: {
+            gt: currentEvent.seriesIndex,
+          },
+        },
+      });
+
+      // Update all future events in the series (but not the date, as each event has its own scheduled date)
+      if (futureEvents.length > 0) {
+        const futureUpdateData = { ...updateData };
+        // Remove date from future updates - each event keeps its own scheduled date
+        delete futureUpdateData.date;
+
+        await prisma.event.updateMany({
+          where: {
+            id: {
+              in: futureEvents.map((e) => e.id),
+            },
+          },
+          data: futureUpdateData,
+        });
+      }
+    }
+
+    // Update the current event
     const event = await prisma.event.update({
       where: { id: eventId },
       data: updateData,

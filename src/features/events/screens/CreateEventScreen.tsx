@@ -16,6 +16,8 @@ import { uploadApi } from '../../../api/uploadApi';
 import { useEventsStore } from '../../../store/events/eventsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
+import type { SeriesInterval } from '../types';
+import { generateSeriesDates, MAX_SERIES_EVENTS } from '../utils/seriesUtils';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Create>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -34,6 +36,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   });
   const [maxAttendees, setMaxAttendees] = React.useState<string>('');
   const [imageUri, setImageUri] = React.useState<string | null>(null);
+  const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -110,8 +113,37 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         alignItems: 'center',
         marginTop: theme.spacing.xs,
       },
+      seriesContainer: {
+        marginTop: theme.spacing.sm,
+      },
+      seriesOptions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.sm,
+        marginTop: theme.spacing.xs,
+      },
+      seriesOption: {
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+      },
+      seriesOptionSelected: {
+        backgroundColor: theme.colors.primary,
+        borderColor: theme.colors.primary,
+      },
+      seriesOptionText: {
+        color: theme.colors.text,
+        fontSize: theme.typography.bodySize,
+      },
+      seriesOptionTextSelected: {
+        color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
+        fontWeight: '600',
+      },
     });
-  }, [isSubmitting, theme.colors.background, theme.colors.border, theme.colors.danger, theme.colors.surface, theme.colors.text, theme.spacing.md, theme.spacing.sm, theme.spacing.xl, theme.spacing.xs, theme.typography.captionSize]);
+  }, [isSubmitting, seriesInterval, theme]);
 
   const validateForm = (): boolean => {
     if (!title.trim()) {
@@ -201,13 +233,15 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
     setIsSubmitting(true);
 
     try {
-      const createRequest: { 
+      const baseRequest: { 
         title: string; 
         description: string; 
         location: string; 
         date: string; 
         maxAttendees?: number;
         imageUrl?: string;
+        seriesInterval?: SeriesInterval;
+        seriesCount?: number;
       } = {
         title: title.trim(),
         description: description.trim(),
@@ -216,16 +250,27 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
       };
 
       if (maxAttendees.trim()) {
-        createRequest.maxAttendees = parseInt(maxAttendees.trim(), 10);
+        baseRequest.maxAttendees = parseInt(maxAttendees.trim(), 10);
       }
 
       if (imageUri) {
-        createRequest.imageUrl = imageUri;
+        baseRequest.imageUrl = imageUri;
       }
 
-      const result = await eventsApi.create(createRequest);
+      // If series is selected, add series info
+      if (seriesInterval) {
+        baseRequest.seriesInterval = seriesInterval;
+        baseRequest.seriesCount = MAX_SERIES_EVENTS;
+      }
+
+      const result = await eventsApi.create(baseRequest);
 
       addEvent(result.event);
+      
+      // If series was created, the backend should handle creating all events
+      // For now, we'll just navigate back
+      // TODO: If backend doesn't support series, create events client-side
+      
       navigation.goBack();
     } catch (err) {
       let errorMessage = 'Failed to create event. Please try again.';
@@ -295,6 +340,43 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
             minimumDate={new Date()}
             label="Date & Time *"
           />
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Repeat Event (optional)
+          </AppText>
+          <AppText color="muted" style={styles.hint}>
+            Note: Repeating events will be created a maximum of {MAX_SERIES_EVENTS} times
+          </AppText>
+          <View style={styles.seriesOptions}>
+            {(['1week', '2weeks', '3weeks', '1month'] as SeriesInterval[]).map((interval) => (
+              <TouchableOpacity
+                key={interval}
+                style={[
+                  styles.seriesOption,
+                  seriesInterval === interval && styles.seriesOptionSelected,
+                ]}
+                onPress={() => setSeriesInterval(seriesInterval === interval ? null : interval)}
+                disabled={isSubmitting}
+              >
+                <AppText
+                  style={[
+                    styles.seriesOptionText,
+                    seriesInterval === interval && styles.seriesOptionTextSelected,
+                  ]}
+                >
+                  {interval === '1week' ? 'Weekly' :
+                   interval === '2weeks' ? 'Bi-weekly' :
+                   interval === '3weeks' ? 'Every 3 weeks' :
+                   'Monthly'}
+                </AppText>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {seriesInterval && (
+            <AppText color="muted" style={styles.hint}>
+              This will create {MAX_SERIES_EVENTS} recurring events
+            </AppText>
+          )}
 
           <AppText style={styles.fieldLabel} color="muted">
             Event Image (optional)

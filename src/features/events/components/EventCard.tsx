@@ -5,6 +5,7 @@ import { AppText } from '../../../components/ui/AppText';
 import { EventImage } from '../../../components/ui/EventImage';
 import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../types';
+import { getSeriesShortLabel } from '../utils/seriesUtils';
 
 interface EventCardProps {
   event: Event;
@@ -60,8 +61,22 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         fontSize: theme.typography.captionSize,
         fontWeight: '600',
       },
+      seriesBadge: {
+        backgroundColor: theme.colors.primary + '20',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: theme.spacing.xs,
+        marginRight: theme.spacing.xs,
+      },
+      seriesBadgeText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
+      },
     });
-  }, [event.isJoined, theme.colors.border, theme.colors.primary, theme.colors.surface, theme.colors.text, theme.mode, theme.spacing.md, theme.spacing.sm, theme.spacing.xs, theme.typography.captionSize]);
+  }, [event.isJoined, event.seriesInterval, theme]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -139,6 +154,14 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
           </AppText>
         </View>
 
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: theme.spacing.xs }}>
+          {event.seriesInterval && (
+            <View style={styles.seriesBadge}>
+              <AppText style={styles.seriesBadgeText} variant="caption">
+                {getSeriesShortLabel(event.seriesInterval)}
+              </AppText>
+            </View>
+          )}
           {event.isJoined && (
             <View style={styles.badge}>
               <AppText style={styles.badgeText} variant="caption">
@@ -146,6 +169,7 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
               </AppText>
             </View>
           )}
+        </View>
         </View>
       </View>
     </TouchableOpacity>

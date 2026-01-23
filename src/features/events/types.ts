@@ -1,3 +1,5 @@
+export type SeriesInterval = '1week' | '2weeks' | '3weeks' | '1month';
+
 export interface Event {
   id: string;
   title: string;
@@ -12,6 +14,9 @@ export interface Event {
   isJoined: boolean;
   canEdit?: boolean; // Whether current user can edit
   coHosts?: EventCoHost[]; // Co-hosts (only included when fetching single event with permissions)
+  seriesId?: string; // ID linking events in a series
+  seriesInterval?: SeriesInterval; // Interval for series recurrence
+  seriesIndex?: number; // Index of this event in the series (0-based)
   createdAt: string;
   updatedAt: string;
 }
@@ -31,6 +36,8 @@ export interface CreateEventRequest {
   date: string; // ISO 8601 format
   maxAttendees?: number;
   imageUrl?: string;
+  seriesInterval?: SeriesInterval; // If provided, creates a series
+  seriesCount?: number; // Number of events in series (max 12, default 12)
 }
 
 export interface CreateEventResponse {
@@ -44,6 +51,7 @@ export interface UpdateEventRequest {
   date?: string;
   maxAttendees?: number;
   imageUrl?: string | null;
+  updateAllFutureEvents?: boolean; // If true, applies changes to all future events in the series
 }
 
 export interface AddCoHostRequest {

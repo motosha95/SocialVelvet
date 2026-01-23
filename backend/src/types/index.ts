@@ -35,6 +35,9 @@ export interface Event {
   isJoined: boolean;
   canEdit?: boolean; // Whether current user can edit
   coHosts?: EventCoHost[]; // Co-hosts (only included when fetching single event with permissions)
+  seriesId?: string; // ID linking events in a series
+  seriesInterval?: '1week' | '2weeks' | '3weeks' | '1month'; // Interval for series recurrence
+  seriesIndex?: number; // Index of this event in the series (0-based)
   createdAt: string;
   updatedAt: string;
 }

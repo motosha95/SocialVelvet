@@ -38,6 +38,9 @@ model Event {
   date         DateTime
   imageUrl     String?
   maxAttendees Int?
+  seriesId     String?  // ID linking events in a series (UUID of first event)
+  seriesInterval String? // '1week' | '2weeks' | '3weeks' | '1month'
+  seriesIndex  Int?     // Index of this event in the series (0-based)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

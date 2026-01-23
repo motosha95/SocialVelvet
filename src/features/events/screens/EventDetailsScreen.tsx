@@ -20,6 +20,7 @@ import { fixAvatarUrl } from '../../../utils/avatarUtils';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
+import { getSeriesLabel } from '../utils/seriesUtils';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -143,6 +144,19 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: theme.spacing.xl,
+      },
+      seriesBadge: {
+        backgroundColor: theme.colors.primary + '20',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: theme.spacing.xs,
+      },
+      seriesBadgeText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
       },
       menuButton: {
         padding: theme.spacing.xs,
@@ -478,6 +492,13 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
 
         <View style={styles.header}>
           <AppText variant="title">{event.title}</AppText>
+          {event.seriesInterval && (
+            <View style={styles.seriesBadge}>
+              <AppText style={styles.seriesBadgeText} variant="caption">
+                {getSeriesLabel(event.seriesInterval)}
+              </AppText>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>

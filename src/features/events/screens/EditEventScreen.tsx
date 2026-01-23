@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -16,6 +16,7 @@ import { uploadApi } from '../../../api/uploadApi';
 import { useEventsStore } from '../../../store/events/eventsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
+import type { Event } from '../types';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Edit>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -23,6 +24,7 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
   const theme = useTheme();
   const { eventId } = route.params;
   const updateEvent = useEventsStore((s) => s.updateEvent);
+  const refreshEvents = useEventsStore((s) => s.refreshEvents);
 
   const [title, setTitle] = React.useState<string>('');
   const [description, setDescription] = React.useState<string>('');
@@ -34,6 +36,16 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [originalEvent, setOriginalEvent] = React.useState<Event | null>(null);
+  const [showSeriesUpdateModal, setShowSeriesUpdateModal] = React.useState<boolean>(false);
+  const [pendingUpdateRequest, setPendingUpdateRequest] = React.useState<{
+    title?: string;
+    description?: string;
+    location?: string;
+    date?: string;
+    maxAttendees?: number;
+    imageUrl?: string | null;
+  } | null>(null);
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -113,6 +125,32 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
         alignItems: 'center',
         paddingVertical: theme.spacing.xl,
       },
+      modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      modalContent: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        padding: theme.spacing.lg,
+        width: '90%',
+        maxWidth: 400,
+      },
+      modalTitle: {
+        fontSize: theme.typography.titleSize,
+        fontWeight: '600',
+        marginBottom: theme.spacing.sm,
+      },
+      modalMessage: {
+        marginBottom: theme.spacing.lg,
+        color: theme.colors.text,
+      },
+      modalButtons: {
+        flexDirection: 'row',
+        gap: theme.spacing.sm,
+      },
     });
   }, [isSubmitting, theme]);
 
@@ -126,6 +164,9 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
           setIsLoading(false);
           return;
         }
+
+        // Store original event for series check
+        setOriginalEvent(event);
 
         // Pre-populate form fields
         setTitle(event.title);
@@ -226,6 +267,77 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
     }
   };
 
+  const prepareUpdateRequest = () => {
+    const updateRequest: {
+      title?: string;
+      description?: string;
+      location?: string;
+      date?: string;
+      maxAttendees?: number;
+      imageUrl?: string | null;
+    } = {};
+
+    // Only include fields that have changed or are being updated
+    updateRequest.title = title.trim();
+    updateRequest.description = description.trim();
+    updateRequest.location = location.trim();
+    updateRequest.date = dateTime.toISOString();
+
+    if (maxAttendees.trim()) {
+      updateRequest.maxAttendees = parseInt(maxAttendees.trim(), 10);
+    } else {
+      updateRequest.maxAttendees = undefined;
+    }
+
+    if (imageUri) {
+      updateRequest.imageUrl = imageUri;
+    } else {
+      updateRequest.imageUrl = null;
+    }
+
+    return updateRequest;
+  };
+
+  const performUpdate = async (updateAllFutureEvents: boolean): Promise<void> => {
+    if (!pendingUpdateRequest) return;
+
+    setIsSubmitting(true);
+    setShowSeriesUpdateModal(false);
+
+    try {
+      const updateRequest = {
+        ...pendingUpdateRequest,
+        updateAllFutureEvents,
+      };
+
+      const result = await eventsApi.update(eventId, updateRequest);
+
+      updateEvent(result.event);
+      
+      // If updating all future events, refresh the events list to get all updated events
+      if (updateAllFutureEvents) {
+        await refreshEvents();
+      }
+      
+      navigation.goBack();
+    } catch (err) {
+      let errorMessage = 'Failed to update event. Please try again.';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        if (err.message.toLowerCase().includes('permission')) {
+          errorMessage = 'You do not have permission to edit this event.';
+        }
+        if (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('auth')) {
+          errorMessage += ' Try logging out and logging back in.';
+        }
+      }
+      setError(errorMessage);
+      setPendingUpdateRequest(null);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const onSubmit = async (): Promise<void> => {
     setError(null);
 
@@ -233,36 +345,20 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
       return;
     }
 
+    const updateRequest = prepareUpdateRequest();
+
+    // Check if event is part of a series and has future events
+    if (originalEvent?.seriesId && originalEvent?.seriesIndex !== undefined) {
+      // Show modal to ask if user wants to update all future events
+      setPendingUpdateRequest(updateRequest);
+      setShowSeriesUpdateModal(true);
+      return;
+    }
+
+    // Not a series event, proceed with normal update
     setIsSubmitting(true);
 
     try {
-      const updateRequest: {
-        title?: string;
-        description?: string;
-        location?: string;
-        date?: string;
-        maxAttendees?: number;
-        imageUrl?: string | null;
-      } = {};
-
-      // Only include fields that have changed or are being updated
-      updateRequest.title = title.trim();
-      updateRequest.description = description.trim();
-      updateRequest.location = location.trim();
-      updateRequest.date = dateTime.toISOString();
-
-      if (maxAttendees.trim()) {
-        updateRequest.maxAttendees = parseInt(maxAttendees.trim(), 10);
-      } else {
-        updateRequest.maxAttendees = undefined;
-      }
-
-      if (imageUri) {
-        updateRequest.imageUrl = imageUri;
-      } else {
-        updateRequest.imageUrl = null;
-      }
-
       const result = await eventsApi.update(eventId, updateRequest);
 
       updateEvent(result.event);
@@ -404,6 +500,57 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
           {error ? <AppText style={styles.error}>{error}</AppText> : null}
         </View>
       </ScrollView>
+
+      <Modal
+        visible={showSeriesUpdateModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowSeriesUpdateModal(false);
+          setPendingUpdateRequest(null);
+        }}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => {
+            setShowSeriesUpdateModal(false);
+            setPendingUpdateRequest(null);
+          }}
+        >
+          <TouchableOpacity 
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{ width: '100%', alignItems: 'center' }}
+          >
+            <View style={styles.modalContent}>
+              <AppText style={styles.modalTitle}>
+                Update Series Event
+              </AppText>
+              <AppText style={styles.modalMessage} color="muted">
+                This event is part of a series. Would you like to apply these changes to all future events in the series, or just this one?
+              </AppText>
+              <View style={styles.modalButtons}>
+                <Button
+                  label="Just This Event"
+                  onPress={() => performUpdate(false)}
+                  variant="secondary"
+                  size="small"
+                  style={{ flex: 1 }}
+                  disabled={isSubmitting}
+                />
+                <Button
+                  label="All Future Events"
+                  onPress={() => performUpdate(true)}
+                  size="small"
+                  style={{ flex: 1 }}
+                  disabled={isSubmitting}
+                />
+              </View>
+            </View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </Screen>
   );
 };

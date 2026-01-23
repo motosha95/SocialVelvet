@@ -6,6 +6,8 @@ import { eventsService } from '../services/events';
 
 export const eventsRouter = express.Router();
 
+const seriesIntervalSchema = z.enum(['1week', '2weeks', '3weeks', '1month']);
+
 const createEventSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
@@ -13,6 +15,8 @@ const createEventSchema = z.object({
   date: z.string().datetime(),
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional(),
+  seriesInterval: seriesIntervalSchema.optional(),
+  seriesCount: z.number().int().min(1).max(12).optional(),
 });
 
 const updateEventSchema = z.object({
@@ -22,6 +26,7 @@ const updateEventSchema = z.object({
   date: z.string().datetime().optional(),
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional().nullable(),
+  updateAllFutureEvents: z.boolean().optional(),
 });
 
 const addCoHostSchema = z.object({
@@ -76,6 +81,9 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       throw new AppError(400, 'Event date must be in the future');
     }
 
+    // If seriesInterval is provided, seriesCount defaults to 12
+    const seriesCount = body.seriesInterval ? (body.seriesCount || 12) : undefined;
+
     const event = await eventsService.createEvent({
       title: body.title,
       description: body.description,
@@ -84,6 +92,8 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       maxAttendees: body.maxAttendees,
       imageUrl: body.imageUrl,
       organizerId: req.userId,
+      seriesInterval: body.seriesInterval,
+      seriesCount,
     });
 
     res.status(201).json({ event });
@@ -155,7 +165,9 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     if (body.maxAttendees !== undefined) updateData.maxAttendees = body.maxAttendees;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
 
-    const event = await eventsService.updateEvent(req.params.id, req.userId, updateData);
+    const updateAllFutureEvents = body.updateAllFutureEvents === true;
+
+    const event = await eventsService.updateEvent(req.params.id, req.userId, updateData, updateAllFutureEvents);
     res.json({ event });
   } catch (err) {
     if (err instanceof Error && err.message.includes('permission')) {
