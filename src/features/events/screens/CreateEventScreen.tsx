@@ -68,7 +68,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         backgroundColor: theme.colors.background,
       },
       textArea: {
-        minHeight: 100,
+        minHeight: 150,
         textAlignVertical: 'top',
       },
       row: {
@@ -276,7 +276,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
             placeholder="Describe your event..."
             placeholderTextColor={theme.colors.mutedText}
             multiline
-            numberOfLines={4}
+            numberOfLines={6}
             editable={!isSubmitting}
             maxLength={1000}
           />
