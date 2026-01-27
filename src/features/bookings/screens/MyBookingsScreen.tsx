@@ -13,6 +13,7 @@ import { EventCard } from '../../events/components/EventCard';
 import type { BookingsStackParamList, AppTabsParamList, EventsStackParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { Event } from '../../events/types';
+import { useAuthStore } from '../../../store/auth/authStore';
 
 type Props = CompositeScreenProps<
   NativeStackScreenProps<BookingsStackParamList, typeof Routes.Bookings.Upcoming | typeof Routes.Bookings.Past>,
@@ -29,6 +30,7 @@ export const MyBookingsScreen = ({ navigation, route }: Props): React.JSX.Elemen
   const isLoading = useEventsStore((s) => s.isLoading);
   const fetchEvents = useEventsStore((s) => s.fetchEvents);
   const refreshEvents = useEventsStore((s) => s.refreshEvents);
+  const userId = useAuthStore((s) => s.session?.userId);
 
   const [isRefreshing, setIsRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState<'upcoming' | 'past'>(

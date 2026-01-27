@@ -15,6 +15,7 @@ const createEventSchema = z.object({
   date: z.string().datetime(),
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional(),
+  isTicketed: z.boolean().optional(),
   seriesInterval: seriesIntervalSchema.optional(),
   seriesCount: z.number().int().min(1).max(12).optional(),
 });
@@ -91,6 +92,7 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       date,
       maxAttendees: body.maxAttendees,
       imageUrl: body.imageUrl,
+      isTicketed: body.isTicketed,
       organizerId: req.userId,
       seriesInterval: body.seriesInterval,
       seriesCount,

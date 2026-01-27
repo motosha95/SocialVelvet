@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -37,6 +37,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [maxAttendees, setMaxAttendees] = React.useState<string>('');
   const [imageUri, setImageUri] = React.useState<string | null>(null);
   const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
+  const [isTicketed, setIsTicketed] = React.useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -240,6 +241,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         date: string; 
         maxAttendees?: number;
         imageUrl?: string;
+        isTicketed?: boolean;
         seriesInterval?: SeriesInterval;
         seriesCount?: number;
       } = {
@@ -255,6 +257,10 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
 
       if (imageUri) {
         baseRequest.imageUrl = imageUri;
+      }
+
+      if (isTicketed) {
+        baseRequest.isTicketed = true;
       }
 
       // If series is selected, add series info
@@ -411,6 +417,24 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
           <AppText color="muted" style={styles.hint}>
             Leave empty for unlimited attendees
           </AppText>
+
+          <View style={[styles.row, { marginTop: theme.spacing.md, alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.fieldLabel} color="muted">
+                Ticketed Event
+              </AppText>
+              <AppText color="muted" style={styles.hint}>
+                All attendees will receive a digital ticket
+              </AppText>
+            </View>
+            <Switch
+              value={isTicketed}
+              onValueChange={setIsTicketed}
+              disabled={isSubmitting}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+              thumbColor={theme.mode === 'dark' ? '#FFFFFF' : '#FFFFFF'}
+            />
+          </View>
 
           <Button 
             label={isSubmitting ? 'Creating...' : 'Create Event'} 

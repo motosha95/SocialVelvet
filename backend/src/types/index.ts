@@ -33,6 +33,7 @@ export interface Event {
   attendeeCount: number;
   maxAttendees?: number;
   isJoined: boolean;
+  isTicketed?: boolean; // Whether this is a ticketed event
   canEdit?: boolean; // Whether current user can edit
   coHosts?: EventCoHost[]; // Co-hosts (only included when fetching single event with permissions)
   seriesId?: string; // ID linking events in a series
@@ -57,6 +58,7 @@ export interface CreateEventRequest {
   date: string; // ISO 8601 format
   maxAttendees?: number;
   imageUrl?: string;
+  isTicketed?: boolean; // If true, creates a ticketed event
 }
 
 export interface UpdateEventRequest {

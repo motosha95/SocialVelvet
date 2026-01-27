@@ -17,6 +17,7 @@ import { useChatStore } from '../../../store/chat/chatStore';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { chatApi } from '../../../api/chatApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
+import { TicketCard } from '../../bookings/components/TicketCard';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
@@ -46,6 +47,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [error, setError] = React.useState<string | null>(null);
   const [menuVisible, setMenuVisible] = React.useState<boolean>(false);
   const [selectedCoHost, setSelectedCoHost] = React.useState<{ userId: string; canEdit: boolean } | null>(null);
+  const [ticketModalVisible, setTicketModalVisible] = React.useState<boolean>(false);
+  const [showTicketAfterJoin, setShowTicketAfterJoin] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
 
@@ -210,6 +213,29 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         fontSize: 10,
         fontWeight: '600',
       },
+      modalContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        padding: theme.spacing.md,
+      },
+      modalContent: {
+        backgroundColor: theme.colors.background,
+        borderRadius: 16,
+        padding: theme.spacing.md,
+        width: '100%',
+        maxHeight: '90%',
+      },
+      modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: theme.spacing.md,
+      },
+      modalScrollContent: {
+        paddingBottom: theme.spacing.md,
+      },
     });
   }, [theme]);
 
@@ -340,6 +366,11 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         // Only update if backend confirms we're joined
         lastApiUpdateRef.current = Date.now();
         setEvent(updatedEvent);
+        // Show ticket if event is ticketed
+        if (updatedEvent.isTicketed) {
+          setShowTicketAfterJoin(true);
+          setTicketModalVisible(true);
+        }
       }
       // Refresh attendees after joining
       const updatedAttendees = await eventsApi.getAttendees(eventId);
@@ -401,6 +432,16 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
       setIsJoining(false);
       setIsLeaving(false);
     }
+  };
+
+  const generateTicketNumber = (): string => {
+    if (!event || !userId) return '';
+    return `${event.id.slice(0, 8).toUpperCase()}-${userId.slice(0, 8).toUpperCase()}`;
+  };
+
+  const handleShowTicket = (): void => {
+    setTicketModalVisible(true);
+    setShowTicketAfterJoin(false);
   };
 
   const handleMessageAttendee = async (attendeeUserId: string): Promise<void> => {
@@ -557,12 +598,21 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
           {/* Don't show join/leave button if user is the organizer */}
           {event.organizerId !== userId && (
             event.isJoined ? (
-              <Button 
-                label={isLeaving ? 'Leaving...' : 'Leave event'} 
-                onPress={handleLeave} 
-                variant="secondary" 
-                size="small"
-              />
+              <View style={{ gap: theme.spacing.sm }}>
+                {event.isTicketed && (
+                  <Button 
+                    label="View Ticket" 
+                    onPress={handleShowTicket} 
+                    variant="secondary"
+                  />
+                )}
+                <Button 
+                  label={isLeaving ? 'Leaving...' : 'Leave event'} 
+                  onPress={handleLeave} 
+                  variant="secondary" 
+                  size="small"
+                />
+              </View>
             ) : (
               <Button label={isJoining ? 'Joining...' : 'Join event'} onPress={handleJoin} />
             )
@@ -827,6 +877,45 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             </View>
           </TouchableOpacity>
         </Modal>
+
+        {/* Ticket Modal */}
+        {event && event.isTicketed && event.isJoined && (
+          <Modal
+            visible={ticketModalVisible}
+            transparent
+            animationType="slide"
+            onRequestClose={() => {
+              setTicketModalVisible(false);
+              setShowTicketAfterJoin(false);
+            }}
+          >
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <AppText variant="title">Your Ticket</AppText>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setTicketModalVisible(false);
+                      setShowTicketAfterJoin(false);
+                    }}
+                  >
+                    <AppText style={{ fontSize: 24 }}>✕</AppText>
+                  </TouchableOpacity>
+                </View>
+                {showTicketAfterJoin && (
+                  <View style={{ marginBottom: theme.spacing.md, padding: theme.spacing.sm, backgroundColor: theme.colors.primary + '20', borderRadius: 8 }}>
+                    <AppText color="muted" variant="caption">
+                      🎉 You've successfully joined this ticketed event! Your ticket is below.
+                    </AppText>
+                  </View>
+                )}
+                <ScrollView contentContainerStyle={styles.modalScrollContent}>
+                  <TicketCard event={event} ticketNumber={generateTicketNumber()} />
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
+        )}
       </ScrollView>
     </Screen>
   );

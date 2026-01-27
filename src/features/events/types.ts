@@ -12,6 +12,7 @@ export interface Event {
   attendeeCount: number;
   maxAttendees?: number;
   isJoined: boolean;
+  isTicketed?: boolean; // Whether this is a ticketed event
   canEdit?: boolean; // Whether current user can edit
   coHosts?: EventCoHost[]; // Co-hosts (only included when fetching single event with permissions)
   seriesId?: string; // ID linking events in a series
@@ -36,6 +37,7 @@ export interface CreateEventRequest {
   date: string; // ISO 8601 format
   maxAttendees?: number;
   imageUrl?: string;
+  isTicketed?: boolean; // If true, creates a ticketed event
   seriesInterval?: SeriesInterval; // If provided, creates a series
   seriesCount?: number; // Number of events in series (max 12, default 12)
 }
@@ -68,4 +70,16 @@ export interface EventAttendee {
   name: string;
   avatarUrl?: string;
   joinedAt: string;
+}
+
+export interface Ticket {
+  id: string;
+  eventId: string;
+  userId: string;
+  eventTitle: string;
+  eventDate: string;
+  eventLocation: string;
+  eventImageUrl?: string;
+  ticketNumber: string; // Unique ticket identifier
+  createdAt: string;
 }

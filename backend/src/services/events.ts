@@ -59,6 +59,7 @@ export const eventsService = {
       attendeeCount,
       maxAttendees: prismaEvent.maxAttendees || undefined,
       isJoined,
+      isTicketed: prismaEvent.isTicketed || undefined,
       canEdit: userId ? canEdit : undefined,
       seriesId: prismaEvent.seriesId || undefined,
       seriesInterval: (prismaEvent.seriesInterval as SeriesInterval) || undefined,
@@ -160,6 +161,7 @@ export const eventsService = {
     date: Date;
     maxAttendees?: number;
     imageUrl?: string;
+    isTicketed?: boolean;
     organizerId: string;
     seriesInterval?: SeriesInterval;
     seriesCount?: number;
@@ -181,6 +183,7 @@ export const eventsService = {
             seriesIndex: number;
             maxAttendees?: number;
             imageUrl?: string | null;
+            isTicketed?: boolean;
           } = {
             title: data.title,
             description: data.description,
@@ -197,6 +200,10 @@ export const eventsService = {
 
           if (data.imageUrl !== undefined) {
             eventData.imageUrl = data.imageUrl || null;
+          }
+
+          if (data.isTicketed !== undefined) {
+            eventData.isTicketed = data.isTicketed;
           }
 
           return prisma.event.create({
@@ -281,6 +288,7 @@ export const eventsService = {
       organizerId: string;
       maxAttendees?: number;
       imageUrl?: string | null;
+      isTicketed?: boolean;
     } = {
       title: data.title,
       description: data.description,
@@ -295,6 +303,10 @@ export const eventsService = {
 
     if (data.imageUrl !== undefined) {
       eventData.imageUrl = data.imageUrl || null;
+    }
+
+    if (data.isTicketed !== undefined) {
+      eventData.isTicketed = data.isTicketed;
     }
 
     const event = await prisma.event.create({
