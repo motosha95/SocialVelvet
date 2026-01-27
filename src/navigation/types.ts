@@ -18,10 +18,16 @@ export type ChatStackParamList = {
   [Routes.Chat.Detail]: { conversationId: string };
 };
 
+export type BookingsStackParamList = {
+  [Routes.Bookings.Upcoming]: undefined;
+  [Routes.Bookings.Past]: undefined;
+};
+
 export type AppTabsParamList = {
   [Routes.App.Events]: NavigatorScreenParams<EventsStackParamList>;
   [Routes.App.Chat]: NavigatorScreenParams<ChatStackParamList>;
   [Routes.App.Profile]: undefined;
+  [Routes.App.Bookings]: NavigatorScreenParams<BookingsStackParamList>;
 };
 
 export type RootStackParamList = {

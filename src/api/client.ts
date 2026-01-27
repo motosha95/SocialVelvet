@@ -8,7 +8,7 @@
 // For Android Emulator: Use 'http://10.0.2.2:3001'
 // For iOS Simulator: Use 'http://localhost:3001'
 // TODO: Update this IP if your computer's IP changes
-const API_BASE_URL = 'http://192.168.8.25:3001';
+const API_BASE_URL = 'http://192.168.80.43:3001';
 
 export interface ApiError {
   error: {

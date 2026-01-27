@@ -69,4 +69,3 @@ export interface EventAttendee {
   avatarUrl?: string;
   joinedAt: string;
 }
-

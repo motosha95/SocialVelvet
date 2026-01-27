@@ -1,22 +1,37 @@
 import React from 'react';
 import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Platform } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
 import { useThemeContext } from '../../../theme/ThemeProvider';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { useUserStore } from '../../../store/user/userStore';
+import { useEventsStore } from '../../../store/events/eventsStore';
 import { uploadApi } from '../../../api/uploadApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
+import { EventCard } from '../../events/components/EventCard';
+import type { AppTabsParamList, EventsStackParamList } from '../../../navigation/types';
+import { Routes } from '../../../navigation/routes';
+import type { Event } from '../../events/types';
 
-export const ProfileScreen = (): React.JSX.Element => {
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<AppTabsParamList, typeof Routes.App.Profile>,
+  NativeStackScreenProps<EventsStackParamList>
+>;
+
+export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
   const { theme, setMode } = useThemeContext();
   const signOut = useAuthStore((s) => s.signOut);
   const profile = useUserStore((s) => s.profile);
   const isLoading = useUserStore((s) => s.isLoading);
   const fetchProfile = useUserStore((s) => s.fetchProfile);
   const updateProfile = useUserStore((s) => s.updateProfile);
+  const events = useEventsStore((s) => s.events);
+  const fetchEvents = useEventsStore((s) => s.fetchEvents);
 
   const [name, setName] = React.useState('');
   const [bio, setBio] = React.useState('');
@@ -25,7 +40,8 @@ export const ProfileScreen = (): React.JSX.Element => {
 
   React.useEffect(() => {
     fetchProfile();
-  }, [fetchProfile]);
+    fetchEvents();
+  }, [fetchProfile, fetchEvents]);
 
   React.useEffect(() => {
     if (profile) {
@@ -33,6 +49,39 @@ export const ProfileScreen = (): React.JSX.Element => {
       setBio(profile.bio || '');
     }
   }, [profile]);
+
+  // Filter and split events
+  const myEvents = React.useMemo(() => {
+    const joined = events.filter((event) => event.isJoined);
+    const now = new Date();
+    
+    const upcoming: Event[] = [];
+    const past: Event[] = [];
+    
+    joined.forEach((event) => {
+      const eventDate = new Date(event.date);
+      if (eventDate >= now) {
+        upcoming.push(event);
+      } else {
+        past.push(event);
+      }
+    });
+    
+    // Sort upcoming by date (soonest first)
+    upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Sort past by date (most recent first)
+    past.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    
+    return { upcoming, past };
+  }, [events]);
+
+  const handleEventPress = (eventId: string) => {
+    // Navigate to Events tab and then to event details screen
+    navigation.navigate(Routes.App.Events, {
+      screen: Routes.Events.Details,
+      params: { eventId },
+    });
+  };
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -93,6 +142,17 @@ export const ProfileScreen = (): React.JSX.Element => {
         justifyContent: 'center',
         alignItems: 'center',
         paddingVertical: theme.spacing.xl,
+      },
+      sectionTitle: {
+        marginBottom: theme.spacing.md,
+        marginTop: theme.spacing.sm,
+      },
+      emptyState: {
+        paddingVertical: theme.spacing.lg,
+        alignItems: 'center',
+      },
+      emptyStateText: {
+        marginTop: theme.spacing.sm,
       },
     });
   }, [theme]);
@@ -249,6 +309,57 @@ export const ProfileScreen = (): React.JSX.Element => {
               />
             )}
           </View>
+        </View>
+
+        {/* My Events Section */}
+        <View style={styles.card}>
+          <AppText variant="title" style={styles.sectionTitle}>
+            My Events
+          </AppText>
+
+          {/* Upcoming Events */}
+          {myEvents.upcoming.length > 0 && (
+            <>
+              <AppText variant="subtitle" color="muted" style={{ marginBottom: theme.spacing.sm }}>
+                Upcoming ({myEvents.upcoming.length})
+              </AppText>
+              {myEvents.upcoming.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onPress={() => handleEventPress(event.id)}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Past Events */}
+          {myEvents.past.length > 0 && (
+            <>
+              <AppText variant="subtitle" color="muted" style={{ marginTop: theme.spacing.md, marginBottom: theme.spacing.sm }}>
+                Past ({myEvents.past.length})
+              </AppText>
+              {myEvents.past.map((event) => (
+                <EventCard
+                  key={event.id}
+                  event={event}
+                  onPress={() => handleEventPress(event.id)}
+                />
+              ))}
+            </>
+          )}
+
+          {/* Empty State */}
+          {myEvents.upcoming.length === 0 && myEvents.past.length === 0 && (
+            <View style={styles.emptyState}>
+              <AppText color="muted" style={styles.emptyStateText}>
+                You haven't joined any events yet.
+              </AppText>
+              <AppText color="muted" variant="caption" style={{ marginTop: theme.spacing.xs }}>
+                Browse events to get started!
+              </AppText>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>
