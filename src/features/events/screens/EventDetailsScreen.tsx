@@ -603,7 +603,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                   <Button 
                     label="View Ticket" 
                     onPress={handleShowTicket} 
-                    variant="secondary"
+                    variant="danger"
                   />
                 )}
                 <Button 
