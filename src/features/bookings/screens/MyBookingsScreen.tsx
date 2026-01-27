@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View, TouchableOpacity, FlatList, RefreshContro
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
@@ -23,6 +24,7 @@ type Props = CompositeScreenProps<
 
 export const MyBookingsScreen = ({ navigation, route }: Props): React.JSX.Element => {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const events = useEventsStore((s) => s.events);
   const isLoading = useEventsStore((s) => s.isLoading);
   const fetchEvents = useEventsStore((s) => s.fetchEvents);
@@ -110,6 +112,7 @@ export const MyBookingsScreen = ({ navigation, route }: Props): React.JSX.Elemen
         borderBottomWidth: 1,
         borderBottomColor: theme.colors.border,
         paddingHorizontal: theme.spacing.md,
+        paddingTop: Math.max(insets.top, theme.spacing.sm),
       },
       tab: {
         flex: 1,
@@ -146,7 +149,7 @@ export const MyBookingsScreen = ({ navigation, route }: Props): React.JSX.Elemen
         textAlign: 'center',
       },
     });
-  }, [theme]);
+  }, [theme, insets.top]);
 
   return (
     <Screen>
