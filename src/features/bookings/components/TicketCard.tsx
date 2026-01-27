@@ -1,5 +1,6 @@
 import React from 'react';
-import { StyleSheet, View, Image } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 
 import { AppText } from '../../../components/ui/AppText';
 import { EventImage } from '../../../components/ui/EventImage';
@@ -13,6 +14,19 @@ interface TicketCardProps {
 
 export const TicketCard = ({ event, ticketNumber }: TicketCardProps): React.JSX.Element => {
   const theme = useTheme();
+
+  // Generate QR code data - encode ticket information as JSON
+  const qrData = React.useMemo(() => {
+    if (!ticketNumber || !event?.id) {
+      return 'TICKET-' + ticketNumber;
+    }
+    return JSON.stringify({
+      ticketNumber,
+      eventId: event.id,
+      eventTitle: event.title,
+      date: event.date,
+    });
+  }, [ticketNumber, event?.id, event?.title, event?.date]);
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -63,14 +77,14 @@ export const TicketCard = ({ event, ticketNumber }: TicketCardProps): React.JSX.
         marginTop: theme.spacing.xs,
         gap: theme.spacing.xs,
       },
-      qrPlaceholder: {
+      qrContainer: {
         width: '100%',
-        height: 120,
-        backgroundColor: theme.colors.border,
-        borderRadius: 12,
-        justifyContent: 'center',
         alignItems: 'center',
+        justifyContent: 'center',
         marginTop: theme.spacing.md,
+        padding: theme.spacing.md,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 12,
       },
     });
   }, [theme]);
@@ -134,10 +148,16 @@ export const TicketCard = ({ event, ticketNumber }: TicketCardProps): React.JSX.
         </View>
       </View>
 
-      <View style={styles.qrPlaceholder}>
-        <AppText color="muted" variant="caption">
-          QR Code
-        </AppText>
+      <View style={styles.qrContainer}>
+        <QRCode
+          value={qrData}
+          size={200}
+          color={theme.mode === 'dark' ? '#FFFFFF' : '#000000'}
+          backgroundColor={theme.mode === 'dark' ? '#1A1A1A' : '#FFFFFF'}
+          logoSize={0}
+          logoMargin={0}
+          logoBackgroundColor="transparent"
+        />
       </View>
     </View>
   );
