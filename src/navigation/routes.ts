@@ -14,6 +14,7 @@ export const Routes = {
     Details: 'Events/Details',
     Create: 'Events/Create',
     Edit: 'Events/Edit',
+    ScanTickets: 'Events/ScanTickets',
   },
   Chat: {
     List: 'Chat/List',

@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Alert, FlatList, ScrollView, StyleSheet, View, Image, TouchableOpacity, Modal } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -18,6 +19,7 @@ import { useAuthStore } from '../../../store/auth/authStore';
 import { chatApi } from '../../../api/chatApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
 import { TicketCard } from '../../bookings/components/TicketCard';
+import { getAdmittedUserIds } from '../utils/admittedTicketsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
@@ -49,8 +51,18 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [selectedCoHost, setSelectedCoHost] = React.useState<{ userId: string; canEdit: boolean } | null>(null);
   const [ticketModalVisible, setTicketModalVisible] = React.useState<boolean>(false);
   const [showTicketAfterJoin, setShowTicketAfterJoin] = React.useState<boolean>(false);
+  const [admittedUserIds, setAdmittedUserIds] = React.useState<Set<string>>(new Set());
   const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
+
+  // Load admitted user IDs from store when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const admitted = getAdmittedUserIds(eventId);
+      console.log('Loading admitted user IDs for event:', eventId, 'Count:', admitted.size);
+      setAdmittedUserIds(admitted);
+    }, [eventId])
+  );
 
   // Check if user can edit (organizer or co-host with permission)
   const canEdit = React.useMemo(() => {
@@ -589,11 +601,19 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
 
         <View style={styles.actions}>
           {canEdit && (
-            <Button
-              label="Edit Event"
-              onPress={() => navigation.navigate(Routes.Events.Edit, { eventId })}
-              variant="secondary"
-            />
+            <>
+              {event.isTicketed && (
+                <Button
+                  label="Scan Tickets"
+                  onPress={() => navigation.navigate(Routes.Events.ScanTickets, { eventId })}
+                />
+              )}
+              <Button
+                label="Edit Event"
+                onPress={() => navigation.navigate(Routes.Events.Edit, { eventId })}
+                variant="secondary"
+              />
+            </>
           )}
           {/* Don't show join/leave button if user is the organizer */}
           {event.organizerId !== userId && (
@@ -657,6 +677,11 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                           {coHosts.some((ch) => ch.userId === item.userId) && (
                             <View style={styles.badge}>
                               <AppText variant="caption" style={styles.badgeText}>Co-Host</AppText>
+                            </View>
+                          )}
+                          {(admittedUserIds.has(item.userId) || item.admittedAt) && (
+                            <View style={[styles.badge, { backgroundColor: '#10B981' }]}>
+                              <AppText variant="caption" style={styles.badgeText}>✓ Admitted</AppText>
                             </View>
                           )}
                         </View>
@@ -910,7 +935,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                   </View>
                 )}
                 <ScrollView contentContainerStyle={styles.modalScrollContent}>
-                  <TicketCard event={event} ticketNumber={generateTicketNumber()} />
+                  <TicketCard event={event} ticketNumber={generateTicketNumber()} userId={userId || undefined} />
                 </ScrollView>
               </View>
             </View>

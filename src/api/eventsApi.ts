@@ -114,4 +114,16 @@ export const eventsApi = {
     }
     await apiClient.patch(`/events/${eventId}/co-hosts/${userId}`, req, token);
   },
+
+  verifyTicket: async (eventId: string, ticketNumber: string, userId?: string): Promise<{ admitted: boolean; message?: string }> => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    return await apiClient.post<{ admitted: boolean; message?: string }>(
+      `/events/${eventId}/tickets/verify`,
+      { ticketNumber, userId },
+      token
+    );
+  },
 };

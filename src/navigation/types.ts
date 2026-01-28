@@ -11,6 +11,7 @@ export type EventsStackParamList = {
   [Routes.Events.Details]: { eventId: string };
   [Routes.Events.Create]: undefined;
   [Routes.Events.Edit]: { eventId: string };
+  [Routes.Events.ScanTickets]: { eventId: string };
 };
 
 export type ChatStackParamList = {

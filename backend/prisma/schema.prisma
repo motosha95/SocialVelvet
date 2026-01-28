@@ -26,6 +26,7 @@ model User {
   coHostedEvents EventCoHost[]          @relation("EventCoHost")
   sentMessages    Message[]              @relation("MessageSender")
   conversations   ConversationParticipant[]
+  tickets         Ticket[]               @relation("TicketOwner")
 
   @@map("users")
 }
@@ -50,6 +51,7 @@ model Event {
   organizer   User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
   attendees   EventAttendee[]
   coHosts     EventCoHost[]
+  tickets     Ticket[]
 
   @@map("events")
 }
@@ -74,6 +76,7 @@ model EventAttendee {
   userId    String
   eventId   String
   joinedAt  DateTime @default(now())
+  admittedAt DateTime? // When ticket was scanned/admitted
 
   // Relations
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -81,6 +84,25 @@ model EventAttendee {
 
   @@unique([userId, eventId])
   @@map("event_attendees")
+}
+
+model Ticket {
+  id           String   @id @default(uuid())
+  ticketNumber String   @unique // Unique ticket identifier
+  eventId      String
+  userId       String   // Owner of the ticket
+  scannedAt    DateTime? // When ticket was scanned
+  scannedBy    String?   // User ID who scanned the ticket (host/organizer)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation("TicketOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([ticketNumber])
+  @@map("tickets")
 }
 
 model Conversation {

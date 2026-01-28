@@ -411,6 +411,7 @@ export const eventsService = {
       name: attendee.user.name,
       avatarUrl: attendee.user.avatarUrl || undefined,
       joinedAt: attendee.joinedAt.toISOString(),
+      admittedAt: attendee.admittedAt?.toISOString(),
     }));
   },
 
@@ -651,5 +652,188 @@ export const eventsService = {
       canEdit: ch.canEdit,
       createdAt: ch.createdAt.toISOString(),
     }));
+  },
+
+  /**
+   * Verify ticket and mark attendee as admitted
+   * Only organizer or co-host with permission can verify tickets
+   */
+  verifyTicket: async (
+    eventId: string,
+    ticketNumber: string,
+    userId: string | undefined,
+    scannerUserId: string
+  ): Promise<{ admitted: boolean; message?: string }> => {
+    // Check if scanner has permission (organizer or co-host with edit permission)
+    const canEdit = await eventsService.canUserEditEvent(eventId, scannerUserId);
+    if (!canEdit) {
+      throw new Error('Only the organizer or co-host can verify tickets');
+    }
+
+    // Get event
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new Error('Event not found');
+    }
+
+    if (!event.isTicketed) {
+      throw new Error('This event is not a ticketed event');
+    }
+
+    // If userId is provided, verify ticket belongs to that user
+    if (userId) {
+      // Check if user is an attendee
+      const attendee = await prisma.eventAttendee.findUnique({
+        where: {
+          userId_eventId: {
+            userId,
+            eventId,
+          },
+        },
+      });
+
+      if (!attendee) {
+        return {
+          admitted: false,
+          message: 'This ticket belongs to a user who is not an attendee of this event.',
+        };
+      }
+
+      // Check if already admitted
+      if (attendee.admittedAt) {
+        return {
+          admitted: false,
+          message: 'This ticket has already been scanned and admitted.',
+        };
+      }
+
+      // Verify ticket number format matches expected pattern
+      // Ticket number format: EVENTID-USERID (first 8 chars of each)
+      const expectedPrefix = eventId.slice(0, 8).toUpperCase();
+      if (!ticketNumber.startsWith(expectedPrefix)) {
+        return {
+          admitted: false,
+          message: 'This ticket does not belong to this event.',
+        };
+      }
+
+      // Mark attendee as admitted
+      await prisma.eventAttendee.update({
+        where: {
+          userId_eventId: {
+            userId,
+            eventId,
+          },
+        },
+        data: {
+          admittedAt: new Date(),
+        },
+      });
+
+      // Create or update ticket record
+      await prisma.ticket.upsert({
+        where: {
+          ticketNumber,
+        },
+        create: {
+          ticketNumber,
+          eventId,
+          userId,
+          scannedAt: new Date(),
+          scannedBy: scannerUserId,
+        },
+        update: {
+          scannedAt: new Date(),
+          scannedBy: scannerUserId,
+        },
+      });
+
+      return {
+        admitted: true,
+        message: 'Ticket verified successfully. Attendee has been admitted.',
+      };
+    }
+
+    // If no userId provided, try to find ticket by ticket number
+    const ticket = await prisma.ticket.findUnique({
+      where: {
+        ticketNumber,
+      },
+      include: {
+        event: true,
+      },
+    });
+
+    if (!ticket) {
+      return {
+        admitted: false,
+        message: 'Ticket not found.',
+      };
+    }
+
+    // Verify ticket belongs to this event
+    if (ticket.eventId !== eventId) {
+      return {
+        admitted: false,
+        message: 'This ticket does not belong to this event.',
+      };
+    }
+
+    // Check if already scanned
+    if (ticket.scannedAt) {
+      return {
+        admitted: false,
+        message: 'This ticket has already been scanned.',
+      };
+    }
+
+    // Check if user is an attendee
+    const attendee = await prisma.eventAttendee.findUnique({
+      where: {
+        userId_eventId: {
+          userId: ticket.userId,
+          eventId,
+        },
+      },
+    });
+
+    if (!attendee) {
+      return {
+        admitted: false,
+        message: 'This ticket belongs to a user who is not an attendee of this event.',
+      };
+    }
+
+    // Mark attendee as admitted
+    await prisma.eventAttendee.update({
+      where: {
+        userId_eventId: {
+          userId: ticket.userId,
+          eventId,
+        },
+      },
+      data: {
+        admittedAt: new Date(),
+      },
+    });
+
+    // Update ticket as scanned
+    await prisma.ticket.update({
+      where: {
+        ticketNumber,
+      },
+      data: {
+        scannedAt: new Date(),
+        scannedBy: scannerUserId,
+      },
+    });
+
+    return {
+      admitted: true,
+      message: 'Ticket verified successfully. Attendee has been admitted.',
+    };
   },
 };

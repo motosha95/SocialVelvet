@@ -63,15 +63,19 @@ export const apiClient = {
 
     if (!response.ok) {
       let errorMessage = `Request failed: ${response.statusText}`;
+      const statusCode = response.status;
       try {
         const error: ApiError = await response.json();
         errorMessage = error.error?.message || errorMessage;
-        console.error(`[apiClient.post] Error from ${endpoint}:`, errorMessage, 'Status:', response.status);
+        console.error(`[apiClient.post] Error from ${endpoint}:`, errorMessage, 'Status:', statusCode);
       } catch {
         // If response is not JSON, use status text
-        console.error(`[apiClient.post] Error from ${endpoint}:`, response.statusText, 'Status:', response.status);
+        console.error(`[apiClient.post] Error from ${endpoint}:`, response.statusText, 'Status:', statusCode);
       }
-      throw new Error(errorMessage);
+      // Include status code in error message for better error handling
+      const error = new Error(errorMessage);
+      (error as any).statusCode = statusCode;
+      throw error;
     }
 
     // Handle 204 No Content (empty response) - common for join/leave operations

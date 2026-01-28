@@ -70,6 +70,7 @@ export interface EventAttendee {
   name: string;
   avatarUrl?: string;
   joinedAt: string;
+  admittedAt?: string; // When ticket was scanned/admitted
 }
 
 export interface Ticket {

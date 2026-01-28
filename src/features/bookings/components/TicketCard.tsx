@@ -10,9 +10,10 @@ import type { Event } from '../../events/types';
 interface TicketCardProps {
   event: Event;
   ticketNumber: string;
+  userId?: string; // User ID for QR code verification
 }
 
-export const TicketCard = ({ event, ticketNumber }: TicketCardProps): React.JSX.Element => {
+export const TicketCard = ({ event, ticketNumber, userId }: TicketCardProps): React.JSX.Element => {
   const theme = useTheme();
 
   // Generate QR code data - encode ticket information as JSON
@@ -20,13 +21,16 @@ export const TicketCard = ({ event, ticketNumber }: TicketCardProps): React.JSX.
     if (!ticketNumber || !event?.id) {
       return 'TICKET-' + ticketNumber;
     }
-    return JSON.stringify({
+    const data = {
       ticketNumber,
       eventId: event.id,
       eventTitle: event.title,
       date: event.date,
-    });
-  }, [ticketNumber, event?.id, event?.title, event?.date]);
+      userId: userId || '', // Include userId for verification
+    };
+    console.log('Generating QR code with data:', data);
+    return JSON.stringify(data);
+  }, [ticketNumber, event?.id, event?.title, event?.date, userId]);
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({

@@ -39,6 +39,11 @@ const updateCoHostSchema = z.object({
   canEdit: z.boolean(),
 });
 
+const verifyTicketSchema = z.object({
+  ticketNumber: z.string().min(1),
+  userId: z.string().uuid().optional(),
+});
+
 // Get all events (public, but includes isJoined if authenticated)
 eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
@@ -251,6 +256,37 @@ eventsRouter.patch('/:id/co-hosts/:userId', authenticate, async (req: AuthReques
     if (err instanceof Error && err.message.includes('organizer')) {
       next(new AppError(403, err.message));
       return;
+    }
+    next(err);
+  }
+});
+
+// Verify ticket (requires auth, only organizer or co-host)
+eventsRouter.post('/:id/tickets/verify', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const body = verifyTicketSchema.parse(req.body);
+    const result = await eventsService.verifyTicket(
+      req.params.id,
+      body.ticketNumber,
+      body.userId,
+      req.userId
+    );
+
+    res.json(result);
+  } catch (err) {
+    if (err instanceof Error) {
+      if (err.message.includes('permission') || err.message.includes('organizer') || err.message.includes('co-host')) {
+        next(new AppError(403, err.message));
+        return;
+      }
+      if (err.message.includes('not found') || err.message.includes('not a ticketed')) {
+        next(new AppError(400, err.message));
+        return;
+      }
     }
     next(err);
   }
