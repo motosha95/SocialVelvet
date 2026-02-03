@@ -75,8 +75,22 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         fontSize: theme.typography.captionSize,
         fontWeight: '600',
       },
+      followedBadge: {
+        backgroundColor: theme.colors.primary + '30',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
+        marginTop: theme.spacing.xs,
+        marginRight: theme.spacing.xs,
+      },
+      followedBadgeText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
+      },
     });
-  }, [event.isJoined, event.seriesInterval, theme]);
+  }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, theme]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -154,7 +168,26 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
           </AppText>
         </View>
 
+        {event.topics && event.topics.length > 0 && (
+          <View style={[styles.meta, { marginTop: theme.spacing.xs, flexWrap: 'wrap', gap: theme.spacing.xs }]}>
+            {event.topics.map((t) => (
+              <View key={t} style={styles.seriesBadge}>
+                <AppText style={styles.seriesBadgeText} variant="caption">
+                  {t}
+                </AppText>
+              </View>
+            ))}
+          </View>
+        )}
+
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: theme.spacing.xs }}>
+          {event.isFromFollowedHost && (
+            <View style={styles.followedBadge}>
+              <AppText style={styles.followedBadgeText} variant="caption">
+                From host you follow
+              </AppText>
+            </View>
+          )}
           {event.seriesInterval && (
             <View style={styles.seriesBadge}>
               <AppText style={styles.seriesBadgeText} variant="caption">

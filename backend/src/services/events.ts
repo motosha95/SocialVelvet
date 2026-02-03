@@ -1,6 +1,8 @@
 import { prisma } from '../db/client';
 import type { Event, EventAttendee, EventCoHost } from '../types';
 import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
+import { followsService } from './follows';
+import { POINTS_PER_ATTENDANCE } from '../constants/gamification';
 
 export const eventsService = {
   /**
@@ -33,7 +35,7 @@ export const eventsService = {
   /**
    * Transform Prisma event to API Event format
    */
-  transformEvent: (prismaEvent: any, userId?: string, includeCoHosts: boolean = false): Event => {
+  transformEvent: (prismaEvent: any, userId?: string, includeCoHosts: boolean = false, followedOrganizerIds?: Set<string>): Event => {
     const attendeeCount = prismaEvent.attendees?.length || 0;
     const isJoined = userId ? prismaEvent.attendees?.some((a: any) => a.userId === userId) || false : false;
     
@@ -60,10 +62,12 @@ export const eventsService = {
       maxAttendees: prismaEvent.maxAttendees || undefined,
       isJoined,
       isTicketed: prismaEvent.isTicketed || undefined,
+      topics: prismaEvent.topics?.length ? [...prismaEvent.topics] : undefined,
       canEdit: userId ? canEdit : undefined,
       seriesId: prismaEvent.seriesId || undefined,
       seriesInterval: (prismaEvent.seriesInterval as SeriesInterval) || undefined,
       seriesIndex: prismaEvent.seriesIndex !== null ? prismaEvent.seriesIndex : undefined,
+      isFromFollowedHost: userId && followedOrganizerIds ? followedOrganizerIds.has(prismaEvent.organizerId) : undefined,
       createdAt: prismaEvent.createdAt.toISOString(),
       updatedAt: prismaEvent.updatedAt.toISOString(),
     };
@@ -83,9 +87,15 @@ export const eventsService = {
   },
 
   /**
-   * Get all events
+   * Get all events. When prioritizeFollowed is true and userId is set, events from followed hosts come first.
    */
-  listEvents: async (userId?: string): Promise<Event[]> => {
+  listEvents: async (userId?: string, prioritizeFollowed: boolean = false): Promise<Event[]> => {
+    let followedIds = new Set<string>();
+    if (userId && prioritizeFollowed) {
+      const ids = await followsService.getFollowingIds(userId);
+      followedIds = new Set(ids);
+    }
+
     const events = await prisma.event.findMany({
       include: {
         organizer: {
@@ -106,7 +116,18 @@ export const eventsService = {
       },
     });
 
-    return events.map((event) => eventsService.transformEvent(event, userId));
+    let result = events.map((event) => eventsService.transformEvent(event, userId, false, followedIds));
+
+    if (userId && prioritizeFollowed && followedIds.size > 0) {
+      result = [...result].sort((a, b) => {
+        const aFollowed = a.isFromFollowedHost ? 1 : 0;
+        const bFollowed = b.isFromFollowedHost ? 1 : 0;
+        if (bFollowed !== aFollowed) return bFollowed - aFollowed;
+        return new Date(a.date).getTime() - new Date(b.date).getTime();
+      });
+    }
+
+    return result;
   },
 
   /**
@@ -162,6 +183,7 @@ export const eventsService = {
     maxAttendees?: number;
     imageUrl?: string;
     isTicketed?: boolean;
+    topics?: string[];
     organizerId: string;
     seriesInterval?: SeriesInterval;
     seriesCount?: number;
@@ -184,6 +206,7 @@ export const eventsService = {
             maxAttendees?: number;
             imageUrl?: string | null;
             isTicketed?: boolean;
+            topics?: string[];
           } = {
             title: data.title,
             description: data.description,
@@ -204,6 +227,10 @@ export const eventsService = {
 
           if (data.isTicketed !== undefined) {
             eventData.isTicketed = data.isTicketed;
+          }
+
+          if (data.topics !== undefined && data.topics.length > 0) {
+            eventData.topics = data.topics;
           }
 
           return prisma.event.create({
@@ -289,6 +316,7 @@ export const eventsService = {
       maxAttendees?: number;
       imageUrl?: string | null;
       isTicketed?: boolean;
+      topics?: string[];
     } = {
       title: data.title,
       description: data.description,
@@ -307,6 +335,10 @@ export const eventsService = {
 
     if (data.isTicketed !== undefined) {
       eventData.isTicketed = data.isTicketed;
+    }
+
+    if (data.topics !== undefined && data.topics.length > 0) {
+      eventData.topics = data.topics;
     }
 
     const event = await prisma.event.create({
@@ -429,6 +461,7 @@ export const eventsService = {
       date?: Date;
       maxAttendees?: number;
       imageUrl?: string;
+      topics?: string[];
     },
     updateAllFutureEvents: boolean = false
   ): Promise<Event> => {
@@ -460,6 +493,7 @@ export const eventsService = {
     }
     if (data.maxAttendees !== undefined) updateData.maxAttendees = data.maxAttendees;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl || null;
+    if (data.topics !== undefined) updateData.topics = data.topics;
 
     // If updateAllFutureEvents is true and event is part of a series, update all future events
     if (updateAllFutureEvents && currentEvent.seriesId && currentEvent.seriesIndex !== null) {
@@ -733,6 +767,16 @@ export const eventsService = {
         },
       });
 
+      // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
+      try {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { points: { increment: POINTS_PER_ATTENDANCE } },
+        });
+      } catch (pointsErr) {
+        console.warn('Failed to award points (migration may not be run):', pointsErr);
+      }
+
       // Create or update ticket record
       await prisma.ticket.upsert({
         where: {
@@ -754,6 +798,7 @@ export const eventsService = {
       return {
         admitted: true,
         message: 'Ticket verified successfully. Attendee has been admitted.',
+        pointsAwarded: POINTS_PER_ATTENDANCE,
       };
     }
 
@@ -820,6 +865,16 @@ export const eventsService = {
       },
     });
 
+    // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
+    try {
+      await prisma.user.update({
+        where: { id: ticket.userId },
+        data: { points: { increment: POINTS_PER_ATTENDANCE } },
+      });
+    } catch (pointsErr) {
+      console.warn('Failed to award points (migration may not be run):', pointsErr);
+    }
+
     // Update ticket as scanned
     await prisma.ticket.update({
       where: {
@@ -834,6 +889,7 @@ export const eventsService = {
     return {
       admitted: true,
       message: 'Ticket verified successfully. Attendee has been admitted.',
+      pointsAwarded: POINTS_PER_ATTENDANCE,
     };
   },
 };

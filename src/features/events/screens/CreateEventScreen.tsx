@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch, Modal, FlatList, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -18,6 +18,7 @@ import type { EventsStackParamList, AppTabsParamList } from '../../../navigation
 import { Routes } from '../../../navigation/routes';
 import type { SeriesInterval } from '../types';
 import { generateSeriesDates, MAX_SERIES_EVENTS } from '../utils/seriesUtils';
+import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Create>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -37,10 +38,20 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [maxAttendees, setMaxAttendees] = React.useState<string>('');
   const [imageUri, setImageUri] = React.useState<string | null>(null);
   const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
+  const [topics, setTopics] = React.useState<string[]>([]);
+  const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
   const [isTicketed, setIsTicketed] = React.useState<boolean>(false);
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+
+  const toggleTopic = (topic: string): void => {
+    setTopics((prev) => {
+      if (prev.includes(topic)) return prev.filter((t) => t !== topic);
+      if (prev.length >= MAX_EVENT_TOPICS) return prev;
+      return [...prev, topic];
+    });
+  };
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -143,6 +154,59 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
         fontWeight: '600',
       },
+      topicsTrigger: {
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 12,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        backgroundColor: theme.colors.background,
+        minHeight: 44,
+        justifyContent: 'center',
+      },
+      topicsChips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.xs,
+        marginTop: theme.spacing.xs,
+      },
+      topicChip: {
+        backgroundColor: theme.colors.primary + '30',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+      },
+      topicChipText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
+      },
+      modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: theme.spacing.lg,
+      },
+      modalContent: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        maxHeight: 400,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+      },
+      modalTitle: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      modalItem: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      modalItemSelected: {
+        backgroundColor: theme.colors.primary + '20',
+      },
     });
   }, [isSubmitting, seriesInterval, theme]);
 
@@ -235,13 +299,14 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
 
     try {
       const baseRequest: { 
-        title: string; 
-        description: string; 
-        location: string; 
-        date: string; 
+        title: string;
+        description: string;
+        location: string;
+        date: string;
         maxAttendees?: number;
         imageUrl?: string;
         isTicketed?: boolean;
+        topics?: string[];
         seriesInterval?: SeriesInterval;
         seriesCount?: number;
       } = {
@@ -261,6 +326,10 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
 
       if (isTicketed) {
         baseRequest.isTicketed = true;
+      }
+
+      if (topics.length > 0) {
+        baseRequest.topics = topics;
       }
 
       // If series is selected, add series info
@@ -383,6 +452,65 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
               This will create {MAX_SERIES_EVENTS} recurring events
             </AppText>
           )}
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Topics (optional, up to {MAX_EVENT_TOPICS})
+          </AppText>
+          <TouchableOpacity
+            style={styles.topicsTrigger}
+            onPress={() => setTopicsModalVisible(true)}
+            disabled={isSubmitting}
+          >
+            <AppText color="muted">
+              {topics.length === 0
+                ? 'Tap to select topics...'
+                : `${topics.length} topic${topics.length === 1 ? '' : 's'} selected`}
+            </AppText>
+            {topics.length > 0 && (
+              <View style={styles.topicsChips}>
+                {topics.map((t) => (
+                  <View key={t} style={styles.topicChip}>
+                    <AppText style={styles.topicChipText}>{t}</AppText>
+                  </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Modal
+            visible={topicsModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setTopicsModalVisible(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setTopicsModalVisible(false)}>
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalTitle}>
+                  <AppText variant="title">Select topics (max {MAX_EVENT_TOPICS})</AppText>
+                </View>
+                <FlatList
+                  data={[...EVENT_TOPICS]}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const selected = topics.includes(item);
+                    const disabled = !selected && topics.length >= MAX_EVENT_TOPICS;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.modalItem, selected && styles.modalItemSelected]}
+                        onPress={() => !disabled && toggleTopic(item)}
+                        disabled={disabled}
+                      >
+                        <AppText>{item}{selected ? ' ✓' : ''}</AppText>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+                <View style={{ padding: theme.spacing.md }}>
+                  <Button label="Done" onPress={() => setTopicsModalVisible(false)} />
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           <AppText style={styles.fieldLabel} color="muted">
             Event Image (optional)

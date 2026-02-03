@@ -29,9 +29,10 @@ const getAuthToken = (): string | undefined => {
 };
 
 export const eventsApi = {
-  list: async (): Promise<Event[]> => {
+  list: async (prioritizeFollowed: boolean = false): Promise<Event[]> => {
     const token = getAuthToken();
-    return await apiClient.get<Event[]>('/events', token);
+    const query = prioritizeFollowed ? '?prioritizeFollowed=true' : '';
+    return await apiClient.get<Event[]>(`/events${query}`, token);
   },
 
   getById: async (id: string, includeCoHosts: boolean = false): Promise<Event | null> => {
@@ -115,12 +116,12 @@ export const eventsApi = {
     await apiClient.patch(`/events/${eventId}/co-hosts/${userId}`, req, token);
   },
 
-  verifyTicket: async (eventId: string, ticketNumber: string, userId?: string): Promise<{ admitted: boolean; message?: string }> => {
+  verifyTicket: async (eventId: string, ticketNumber: string, userId?: string): Promise<{ admitted: boolean; message?: string; pointsAwarded?: number }> => {
     const token = getAuthToken();
     if (!token) {
       throw new Error('Authentication required');
     }
-    return await apiClient.post<{ admitted: boolean; message?: string }>(
+    return await apiClient.post<{ admitted: boolean; message?: string; pointsAwarded?: number }>(
       `/events/${eventId}/tickets/verify`,
       { ticketNumber, userId },
       token

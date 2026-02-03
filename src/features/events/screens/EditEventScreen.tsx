@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Modal } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Modal, FlatList, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -17,6 +17,7 @@ import { useEventsStore } from '../../../store/events/eventsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { Event } from '../types';
+import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Edit>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -36,6 +37,8 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [topics, setTopics] = React.useState<string[]>([]);
+  const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
   const [originalEvent, setOriginalEvent] = React.useState<Event | null>(null);
   const [showSeriesUpdateModal, setShowSeriesUpdateModal] = React.useState<boolean>(false);
   const [pendingUpdateRequest, setPendingUpdateRequest] = React.useState<{
@@ -45,7 +48,16 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
     date?: string;
     maxAttendees?: number;
     imageUrl?: string | null;
+    topics?: string[];
   } | null>(null);
+
+  const toggleTopic = (topic: string): void => {
+    setTopics((prev) => {
+      if (prev.includes(topic)) return prev.filter((t) => t !== topic);
+      if (prev.length >= MAX_EVENT_TOPICS) return prev;
+      return [...prev, topic];
+    });
+  };
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -151,6 +163,55 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
         flexDirection: 'row',
         gap: theme.spacing.sm,
       },
+      topicsTrigger: {
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 12,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        backgroundColor: theme.colors.background,
+        minHeight: 44,
+        justifyContent: 'center',
+      },
+      topicsChips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.xs,
+        marginTop: theme.spacing.xs,
+      },
+      topicChip: {
+        backgroundColor: theme.colors.primary + '30',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+      },
+      topicChipText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
+      },
+      topicsModalContent: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        maxHeight: 400,
+        width: '90%',
+        maxWidth: 400,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+      },
+      topicsModalTitle: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      topicsModalItem: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      topicsModalItemSelected: {
+        backgroundColor: theme.colors.primary + '20',
+      },
     });
   }, [isSubmitting, theme]);
 
@@ -183,6 +244,8 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
         if (event.imageUrl) {
           setImageUri(event.imageUrl);
         }
+
+        setTopics(event.topics ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load event');
       } finally {
@@ -275,6 +338,7 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
       date?: string;
       maxAttendees?: number;
       imageUrl?: string | null;
+      topics?: string[];
     } = {};
 
     // Only include fields that have changed or are being updated
@@ -294,6 +358,8 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
     } else {
       updateRequest.imageUrl = null;
     }
+
+    updateRequest.topics = topics.length > 0 ? topics : [];
 
     return updateRequest;
   };
@@ -455,6 +521,65 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
             minimumDate={new Date()}
             label="Date & Time *"
           />
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Topics (optional, up to {MAX_EVENT_TOPICS})
+          </AppText>
+          <TouchableOpacity
+            style={styles.topicsTrigger}
+            onPress={() => setTopicsModalVisible(true)}
+            disabled={isSubmitting}
+          >
+            <AppText color="muted">
+              {topics.length === 0
+                ? 'Tap to select topics...'
+                : `${topics.length} topic${topics.length === 1 ? '' : 's'} selected`}
+            </AppText>
+            {topics.length > 0 && (
+              <View style={styles.topicsChips}>
+                {topics.map((t) => (
+                  <View key={t} style={styles.topicChip}>
+                    <AppText style={styles.topicChipText}>{t}</AppText>
+                  </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Modal
+            visible={topicsModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setTopicsModalVisible(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setTopicsModalVisible(false)}>
+              <Pressable style={styles.topicsModalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.topicsModalTitle}>
+                  <AppText variant="title">Select topics (max {MAX_EVENT_TOPICS})</AppText>
+                </View>
+                <FlatList
+                  data={[...EVENT_TOPICS]}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const selected = topics.includes(item);
+                    const disabled = !selected && topics.length >= MAX_EVENT_TOPICS;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.topicsModalItem, selected && styles.topicsModalItemSelected]}
+                        onPress={() => !disabled && toggleTopic(item)}
+                        disabled={disabled}
+                      >
+                        <AppText>{item}{selected ? ' ✓' : ''}</AppText>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+                <View style={{ padding: theme.spacing.md }}>
+                  <Button label="Done" onPress={() => setTopicsModalVisible(false)} />
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
 
           <AppText style={styles.fieldLabel} color="muted">
             Event Image (optional)

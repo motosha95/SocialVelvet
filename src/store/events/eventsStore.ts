@@ -20,7 +20,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
-      const events = await eventsApi.list();
+      const events = await eventsApi.list(true); // Prioritize events from followed hosts
       set({ events, isLoading: false, error: null });
     } catch (err) {
       set({
@@ -34,7 +34,7 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ error: null });
 
     try {
-      const events = await eventsApi.list();
+      const events = await eventsApi.list(true);
       set({ events, error: null });
     } catch (err) {
       set({

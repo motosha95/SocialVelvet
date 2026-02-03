@@ -1,6 +1,7 @@
 import React from 'react';
-import { StyleSheet, View, Alert, ActivityIndicator } from 'react-native';
+import { StyleSheet, View, Alert, ActivityIndicator, Platform } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { Audio } from 'expo-av';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -36,6 +37,196 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
   const [admittedUserIds, setAdmittedUserIds] = React.useState<Set<string>>(new Set());
   const [isVerifying, setIsVerifying] = React.useState<boolean>(false);
   const lastScannedRef = React.useRef<{ ticketNumber: string; timestamp: number } | null>(null);
+  const [sound, setSound] = React.useState<Audio.Sound | null>(null);
+
+  // Initialize audio mode
+  React.useEffect(() => {
+    const setupAudio = async (): Promise<void> => {
+      try {
+        await Audio.setAudioModeAsync({
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+        });
+      } catch (error) {
+        console.warn('Failed to set audio mode:', error);
+      }
+    };
+    void setupAudio();
+
+    return () => {
+      // Cleanup sound on unmount
+      if (sound) {
+        void sound.unloadAsync();
+      }
+    };
+  }, [sound]);
+
+  // Play success sound (positive beep)
+  const playSuccessSound = React.useCallback(async (): Promise<void> => {
+    try {
+      // Use a simple approach: play a short beep using expo-av
+      // Generate audio data for a success beep (high pitch, short)
+      const duration = 0.15; // 150ms
+      const frequency = 800; // Higher frequency for success
+      const sampleRate = 22050; // Lower sample rate for smaller file
+      const numSamples = Math.floor(sampleRate * duration);
+      
+      // Create audio buffer
+      const samples = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        // Sine wave with fade in/out
+        const fade = Math.min(1, Math.min(t * 10, (duration - t) * 10));
+        samples[i] = Math.sin(2 * Math.PI * frequency * t) * fade * 0.3;
+      }
+      
+      // Convert to 16-bit PCM
+      const pcmData = new Int16Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        pcmData[i] = Math.max(-32768, Math.min(32767, Math.floor(samples[i] * 32768)));
+      }
+      
+      // Create WAV file
+      const wavBuffer = createWavFile(pcmData, sampleRate);
+      const base64 = arrayBufferToBase64(wavBuffer);
+      const dataUri = `data:audio/wav;base64,${base64}`;
+      
+      const { sound: successSound } = await Audio.Sound.createAsync(
+        { uri: dataUri },
+        { shouldPlay: true, volume: 0.8 }
+      );
+      
+      successSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          void successSound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.warn('Could not play success sound:', error);
+    }
+  }, []);
+
+  // Play error sound (negative buzzer)
+  const playErrorSound = React.useCallback(async (): Promise<void> => {
+    try {
+      // Generate audio data for an error beep (low pitch, longer)
+      const duration = 0.25; // 250ms
+      const frequency = 300; // Lower frequency for error
+      const sampleRate = 22050;
+      const numSamples = Math.floor(sampleRate * duration);
+      
+      // Create audio buffer with sawtooth wave for harsher sound
+      const samples = new Float32Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        const t = i / sampleRate;
+        const fade = Math.min(1, Math.min(t * 8, (duration - t) * 8));
+        // Sawtooth wave
+        const phase = (t * frequency) % 1;
+        samples[i] = (phase * 2 - 1) * fade * 0.3;
+      }
+      
+      // Convert to 16-bit PCM
+      const pcmData = new Int16Array(numSamples);
+      for (let i = 0; i < numSamples; i++) {
+        pcmData[i] = Math.max(-32768, Math.min(32767, Math.floor(samples[i] * 32768)));
+      }
+      
+      // Create WAV file
+      const wavBuffer = createWavFile(pcmData, sampleRate);
+      const base64 = arrayBufferToBase64(wavBuffer);
+      const dataUri = `data:audio/wav;base64,${base64}`;
+      
+      const { sound: errorSound } = await Audio.Sound.createAsync(
+        { uri: dataUri },
+        { shouldPlay: true, volume: 0.8 }
+      );
+      
+      errorSound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          void errorSound.unloadAsync();
+        }
+      });
+    } catch (error) {
+      console.warn('Could not play error sound:', error);
+    }
+  }, []);
+
+  // Helper function to create WAV file from PCM data
+  const createWavFile = (pcmData: Int16Array, sampleRate: number): ArrayBuffer => {
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const byteRate = sampleRate * numChannels * (bitsPerSample / 8);
+    const blockAlign = numChannels * (bitsPerSample / 8);
+    const dataSize = pcmData.length * (bitsPerSample / 8);
+    const fileSize = 36 + dataSize;
+    
+    const buffer = new ArrayBuffer(44 + dataSize);
+    const view = new DataView(buffer);
+    
+    // RIFF header
+    view.setUint8(0, 0x52); // 'R'
+    view.setUint8(1, 0x49); // 'I'
+    view.setUint8(2, 0x46); // 'F'
+    view.setUint8(3, 0x46); // 'F'
+    view.setUint32(4, fileSize, true);
+    view.setUint8(8, 0x57); // 'W'
+    view.setUint8(9, 0x41); // 'A'
+    view.setUint8(10, 0x56); // 'V'
+    view.setUint8(11, 0x45); // 'E'
+    
+    // fmt chunk
+    view.setUint8(12, 0x66); // 'f'
+    view.setUint8(13, 0x6D); // 'm'
+    view.setUint8(14, 0x74); // 't'
+    view.setUint8(15, 0x20); // ' '
+    view.setUint32(16, 16, true); // fmt chunk size
+    view.setUint16(20, 1, true); // audio format (PCM)
+    view.setUint16(22, numChannels, true);
+    view.setUint32(24, sampleRate, true);
+    view.setUint32(28, byteRate, true);
+    view.setUint16(32, blockAlign, true);
+    view.setUint16(34, bitsPerSample, true);
+    
+    // data chunk
+    view.setUint8(36, 0x64); // 'd'
+    view.setUint8(37, 0x61); // 'a'
+    view.setUint8(38, 0x74); // 't'
+    view.setUint8(39, 0x61); // 'a'
+    view.setUint32(40, dataSize, true);
+    
+    // Write PCM data
+    const pcmView = new DataView(buffer, 44);
+    for (let i = 0; i < pcmData.length; i++) {
+      pcmView.setInt16(i * 2, pcmData[i], true);
+    }
+    
+    return buffer;
+  };
+
+  // Helper function to convert ArrayBuffer to base64
+  const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    // Use a polyfill for btoa if needed, or use a library
+    if (typeof btoa !== 'undefined') {
+      return btoa(binary);
+    }
+    // Fallback for React Native
+    try {
+      // Try using Buffer if available (Node.js environment)
+      if (typeof Buffer !== 'undefined') {
+        return Buffer.from(bytes).toString('base64');
+      }
+    } catch {
+      // Ignore
+    }
+    // If all else fails, return empty string (sound won't play but won't crash)
+    console.warn('btoa not available, sound playback may not work');
+    return '';
+  };
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -138,6 +329,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
       try {
         // Validate ticket belongs to this event (client-side check first)
         if (ticketData.eventId && ticketData.eventId !== eventId) {
+          void playErrorSound();
           Alert.alert(
             'Invalid Ticket ❌',
             'This ticket does not belong to this event. Please scan a ticket for the correct event.',
@@ -159,6 +351,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
 
         // Check if already scanned locally
         if (scannedTickets.has(ticketData.ticketNumber)) {
+          void playErrorSound();
           Alert.alert(
             'Already Scanned',
             `Ticket ${ticketData.ticketNumber} has already been scanned.`,
@@ -188,6 +381,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
 
           if (!result.admitted) {
             // Backend rejected the ticket
+            void playErrorSound();
             Alert.alert(
               'Invalid Ticket ❌',
               result.message || 'This ticket is not valid for this event or has already been used.',
@@ -195,8 +389,11 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                 {
                   text: 'OK',
                   onPress: () => {
-                    setIsScanning(true);
-                    setIsVerifying(false);
+                    // Add a small delay before resuming to prevent immediate re-scan
+                    setTimeout(() => {
+                      setIsScanning(true);
+                      setIsVerifying(false);
+                    }, 500);
                   },
                 },
               ]
@@ -218,9 +415,14 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
             console.warn('No userId found in ticket data:', ticketData);
           }
 
+          // Play success sound
+          void playSuccessSound();
+
           Alert.alert(
             'Ticket Verified ✓',
-            `Ticket ${ticketData.ticketNumber} has been verified and the attendee has been admitted.`,
+            result.pointsAwarded
+              ? `Attendee admitted! They earned ${result.pointsAwarded} points for attending.`
+              : `Ticket ${ticketData.ticketNumber} has been verified and the attendee has been admitted.`,
             [
               {
                 text: 'Scan Another',
@@ -252,6 +454,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
             // Fallback: Local verification (client-side only)
             // This allows the app to work while backend endpoint is being implemented
             if (!ticketData.userId) {
+              void playErrorSound();
               Alert.alert(
                 'Invalid Ticket ❌',
                 'Ticket QR code is missing user information. Cannot verify ticket locally.',
@@ -259,8 +462,10 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                   {
                     text: 'OK',
                     onPress: () => {
-                      setIsScanning(true);
-                      setIsVerifying(false);
+                      setTimeout(() => {
+                        setIsScanning(true);
+                        setIsVerifying(false);
+                      }, 500);
                     },
                   },
                 ]
@@ -275,6 +480,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
               const isAttendee = attendees.some((a) => a.userId === ticketData.userId);
               
               if (!isAttendee) {
+                void playErrorSound();
                 Alert.alert(
                   'Invalid Ticket ❌',
                   'This ticket belongs to a user who is not an attendee of this event.',
@@ -282,8 +488,10 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                     {
                       text: 'OK',
                       onPress: () => {
-                        setIsScanning(true);
-                        setIsVerifying(false);
+                        setTimeout(() => {
+                          setIsScanning(true);
+                          setIsVerifying(false);
+                        }, 500);
                       },
                     },
                   ]
@@ -301,6 +509,9 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
               setAdmittedUserIds(newAdmittedSet);
               addAdmittedUserId(eventId, ticketData.userId);
 
+              // Play success sound
+              void playSuccessSound();
+
               Alert.alert(
                 'Ticket Verified ✓ (Local)',
                 `Ticket ${ticketData.ticketNumber} has been verified locally. Note: Backend endpoint not yet implemented.`,
@@ -308,13 +519,16 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                   {
                     text: 'Scan Another',
                     onPress: () => {
-                      setIsScanning(true);
-                      setIsVerifying(false);
+                      setTimeout(() => {
+                        setIsScanning(true);
+                        setIsVerifying(false);
+                      }, 500);
                     },
                   },
                 ]
               );
             } catch (attendeesError) {
+              void playErrorSound();
               Alert.alert(
                 'Verification Error',
                 'Failed to verify ticket. Please try again.',
@@ -322,8 +536,10 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                   {
                     text: 'OK',
                     onPress: () => {
-                      setIsScanning(true);
-                      setIsVerifying(false);
+                      setTimeout(() => {
+                        setIsScanning(true);
+                        setIsVerifying(false);
+                      }, 500);
                     },
                   },
                 ]
@@ -331,6 +547,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
             }
           } else if (errorMessage.includes('not belong') || errorMessage.includes('invalid')) {
             // Check if it's a validation error (ticket doesn't belong to event)
+            void playErrorSound();
             Alert.alert(
               'Invalid Ticket ❌',
               'This ticket does not belong to this event. Please scan a ticket for the correct event.',
@@ -338,13 +555,16 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                 {
                   text: 'OK',
                   onPress: () => {
-                    setIsScanning(true);
-                    setIsVerifying(false);
+                    setTimeout(() => {
+                      setIsScanning(true);
+                      setIsVerifying(false);
+                    }, 500);
                   },
                 },
               ]
             );
           } else {
+            void playErrorSound();
             Alert.alert(
               'Verification Error',
               errorMessage,
@@ -352,8 +572,10 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
                 {
                   text: 'OK',
                   onPress: () => {
-                    setIsScanning(true);
-                    setIsVerifying(false);
+                    setTimeout(() => {
+                      setIsScanning(true);
+                      setIsVerifying(false);
+                    }, 500);
                   },
                 },
               ]
@@ -362,6 +584,7 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
         }
       } catch (error) {
         // Handle parsing or other errors
+        void playErrorSound();
         Alert.alert(
           'Scan Error',
           'Failed to process the QR code. Please make sure you are scanning a valid ticket.',
@@ -369,8 +592,10 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
             {
               text: 'OK',
               onPress: () => {
-                setIsScanning(true);
-                setIsVerifying(false);
+                setTimeout(() => {
+                  setIsScanning(true);
+                  setIsVerifying(false);
+                }, 500);
               },
             },
           ]

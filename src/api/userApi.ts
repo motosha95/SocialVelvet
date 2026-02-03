@@ -12,6 +12,7 @@ export interface UserProfile {
   name: string;
   avatarUrl?: string;
   bio?: string;
+  points?: number;
   createdAt: string;
 }
 

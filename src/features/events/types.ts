@@ -13,7 +13,9 @@ export interface Event {
   maxAttendees?: number;
   isJoined: boolean;
   isTicketed?: boolean; // Whether this is a ticketed event
+  topics?: string[]; // Up to 3 topics from predefined list
   canEdit?: boolean; // Whether current user can edit
+  isFromFollowedHost?: boolean; // Whether the organizer is someone the current user follows
   coHosts?: EventCoHost[]; // Co-hosts (only included when fetching single event with permissions)
   seriesId?: string; // ID linking events in a series
   seriesInterval?: SeriesInterval; // Interval for series recurrence
@@ -38,6 +40,7 @@ export interface CreateEventRequest {
   maxAttendees?: number;
   imageUrl?: string;
   isTicketed?: boolean; // If true, creates a ticketed event
+  topics?: string[]; // Up to 3 from predefined list
   seriesInterval?: SeriesInterval; // If provided, creates a series
   seriesCount?: number; // Number of events in series (max 12, default 12)
 }
@@ -53,6 +56,7 @@ export interface UpdateEventRequest {
   date?: string;
   maxAttendees?: number;
   imageUrl?: string | null;
+  topics?: string[];
   updateAllFutureEvents?: boolean; // If true, applies changes to all future events in the series
 }
 

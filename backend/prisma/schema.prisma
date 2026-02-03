@@ -17,6 +17,7 @@ model User {
   password  String   // Hashed password
   avatarUrl String?
   bio       String?
+  points    Int      @default(0) // Gamification: earned by attending events (ticket scanned)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -27,8 +28,25 @@ model User {
   sentMessages    Message[]              @relation("MessageSender")
   conversations   ConversationParticipant[]
   tickets         Ticket[]               @relation("TicketOwner")
+  following       Follow[]               @relation("UserFollowing")   // Users this user follows
+  followers       Follow[]               @relation("UserFollowers")   // Users who follow this user
 
   @@map("users")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   // User who follows
+  followingId String   // User being followed
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
 }
 
 model Event {
@@ -40,6 +58,7 @@ model Event {
   imageUrl     String?
   maxAttendees Int?
   isTicketed   Boolean  @default(false) // Whether this is a ticketed event
+  topics       String[] @default([])   // Up to 3 topics from predefined list
   seriesId     String?  // ID linking events in a series (UUID of first event)
   seriesInterval String? // '1week' | '2weeks' | '3weeks' | '1month'
   seriesIndex  Int?     // Index of this event in the series (0-based)

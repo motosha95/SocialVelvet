@@ -2,6 +2,7 @@ import express from 'express';
 import { z } from 'zod';
 import { authenticate, optionalAuthenticate, type AuthRequest } from '../middleware/auth';
 import { AppError } from '../middleware/errorHandler';
+import { validateTopics } from '../constants/topics';
 import { eventsService } from '../services/events';
 
 export const eventsRouter = express.Router();
@@ -16,6 +17,11 @@ const createEventSchema = z.object({
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional(),
   isTicketed: z.boolean().optional(),
+  topics: z
+    .array(z.string())
+    .max(3)
+    .optional()
+    .transform((arr) => (arr ? validateTopics(arr) : undefined)),
   seriesInterval: seriesIntervalSchema.optional(),
   seriesCount: z.number().int().min(1).max(12).optional(),
 });
@@ -27,6 +33,11 @@ const updateEventSchema = z.object({
   date: z.string().datetime().optional(),
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional().nullable(),
+  topics: z
+    .array(z.string())
+    .max(3)
+    .optional()
+    .transform((arr) => (arr ? validateTopics(arr) : undefined)),
   updateAllFutureEvents: z.boolean().optional(),
 });
 
@@ -44,11 +55,12 @@ const verifyTicketSchema = z.object({
   userId: z.string().uuid().optional(),
 });
 
-// Get all events (public, but includes isJoined if authenticated)
+// Get all events (public, but includes isJoined if authenticated). ?prioritizeFollowed=true puts events from followed hosts first.
 eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
     const userId = req.userId;
-    const events = await eventsService.listEvents(userId);
+    const prioritizeFollowed = req.query.prioritizeFollowed === 'true';
+    const events = await eventsService.listEvents(userId, prioritizeFollowed);
     res.json(events);
   } catch (err) {
     next(err);
@@ -98,6 +110,7 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       maxAttendees: body.maxAttendees,
       imageUrl: body.imageUrl,
       isTicketed: body.isTicketed,
+      topics: body.topics,
       organizerId: req.userId,
       seriesInterval: body.seriesInterval,
       seriesCount,
@@ -171,6 +184,7 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     if (body.date !== undefined) updateData.date = new Date(body.date);
     if (body.maxAttendees !== undefined) updateData.maxAttendees = body.maxAttendees;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
+    if (body.topics !== undefined) updateData.topics = body.topics;
 
     const updateAllFutureEvents = body.updateAllFutureEvents === true;
 

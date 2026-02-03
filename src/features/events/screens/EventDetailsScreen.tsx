@@ -17,6 +17,7 @@ import { eventsApi } from '../../../api/eventsApi';
 import { useChatStore } from '../../../store/chat/chatStore';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { chatApi } from '../../../api/chatApi';
+import { followApi } from '../../../api/followApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
 import { TicketCard } from '../../bookings/components/TicketCard';
 import { getAdmittedUserIds } from '../utils/admittedTicketsStore';
@@ -52,6 +53,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [ticketModalVisible, setTicketModalVisible] = React.useState<boolean>(false);
   const [showTicketAfterJoin, setShowTicketAfterJoin] = React.useState<boolean>(false);
   const [admittedUserIds, setAdmittedUserIds] = React.useState<Set<string>>(new Set());
+  const [isFollowingHost, setIsFollowingHost] = React.useState<boolean>(false);
+  const [isFollowLoading, setIsFollowLoading] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
 
@@ -310,6 +313,25 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     void loadAttendees();
   }, [eventId]);
 
+  // Fetch whether current user follows the host (when not the organizer)
+  React.useEffect(() => {
+    if (!event || !userId || event.organizerId === userId) {
+      return;
+    }
+    let cancelled = false;
+    followApi
+      .isFollowing(event.organizerId)
+      .then((following) => {
+        if (!cancelled) setIsFollowingHost(following);
+      })
+      .catch(() => {
+        if (!cancelled) setIsFollowingHost(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [event?.organizerId, userId]);
+
   // Update event when store changes (but not if we just updated it from API or optimistically)
   React.useEffect(() => {
     // Skip if we're currently joining/leaving (optimistic update in progress)
@@ -387,6 +409,34 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
       // Refresh attendees after joining
       const updatedAttendees = await eventsApi.getAttendees(eventId);
       setAttendees(updatedAttendees);
+
+      // Ask if user wants to follow the host (only if not organizer and not already following)
+      const currentEvent = updatedEvent ?? event;
+      if (
+        userId &&
+        currentEvent &&
+        currentEvent.organizerId !== userId &&
+        !isFollowingHost
+      ) {
+        Alert.alert(
+          'Follow host?',
+          `Would you like to follow ${currentEvent.organizerName} to see their future events first?`,
+          [
+            { text: 'Not now', style: 'cancel' },
+            {
+              text: 'Follow',
+              onPress: async () => {
+                try {
+                  await followApi.follow(currentEvent.organizerId);
+                  setIsFollowingHost(true);
+                } catch {
+                  // Silently ignore follow failure (user can follow from button later)
+                }
+              },
+            },
+          ]
+        );
+      }
     } catch (err) {
       // Revert optimistic update on error
       if (originalEvent) {
@@ -495,6 +545,24 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
   };
 
+  const handleFollowToggle = async (): Promise<void> => {
+    if (!event || !userId || event.organizerId === userId || isFollowLoading) return;
+    setIsFollowLoading(true);
+    try {
+      if (isFollowingHost) {
+        await followApi.unfollow(event.organizerId);
+        setIsFollowingHost(false);
+      } else {
+        await followApi.follow(event.organizerId);
+        setIsFollowingHost(true);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to update follow');
+    } finally {
+      setIsFollowLoading(false);
+    }
+  };
+
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
@@ -575,12 +643,31 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
               </AppText>
               <LocationMap location={event.location} height={200} />
             </View>
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                👤
-              </AppText>
-              <AppText>Organized by {event.organizerName}</AppText>
+            <View style={[styles.metaRow, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
+              <View style={styles.metaRow}>
+                <AppText color="muted" variant="caption">
+                  👤
+                </AppText>
+                <AppText>Organized by {event.organizerName}</AppText>
+              </View>
+              {userId && event.organizerId !== userId && (
+                <Button
+                  label={isFollowLoading ? '...' : isFollowingHost ? 'Following' : 'Follow'}
+                  onPress={handleFollowToggle}
+                  variant={isFollowingHost ? 'secondary' : 'primary'}
+                  size="small"
+                  disabled={isFollowLoading}
+                />
+              )}
             </View>
+            {event.topics && event.topics.length > 0 && (
+              <View style={styles.metaRow}>
+                <AppText color="muted" variant="caption">
+                  🏷️
+                </AppText>
+                <AppText>Topics: {event.topics.join(', ')}</AppText>
+              </View>
+            )}
             <View style={styles.metaRow}>
               <AppText color="muted" variant="caption">
                 👥
@@ -679,7 +766,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                               <AppText variant="caption" style={styles.badgeText}>Co-Host</AppText>
                             </View>
                           )}
-                          {(admittedUserIds.has(item.userId) || item.admittedAt) && (
+                          {canEdit && (admittedUserIds.has(item.userId) || item.admittedAt) && (
                             <View style={[styles.badge, { backgroundColor: '#10B981' }]}>
                               <AppText variant="caption" style={styles.badgeText}>✓ Admitted</AppText>
                             </View>
