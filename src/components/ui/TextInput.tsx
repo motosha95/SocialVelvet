@@ -24,9 +24,10 @@ export const TextInput = ({ containerStyle, style, ...rest }: TextInputProps): R
         color: theme.colors.text,
         backgroundColor: theme.colors.surface,
         fontSize: theme.typography.bodySize,
+        ...theme.shadow('sm'),
       },
     });
-  }, [theme.colors.border, theme.colors.surface, theme.colors.text, theme.spacing.md, theme.spacing.sm, theme.typography.bodySize]);
+  }, [theme]);
 
   return (
     <View style={[styles.container, containerStyle]}>

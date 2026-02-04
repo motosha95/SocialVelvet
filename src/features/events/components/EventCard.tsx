@@ -22,12 +22,16 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         backgroundColor: theme.colors.surface,
         borderColor: theme.colors.border,
         borderWidth: 1,
-        borderRadius: 12,
+        borderRadius: 14,
         overflow: 'hidden',
         marginBottom: theme.spacing.sm,
+        ...theme.shadow('sm'),
       },
       imageContainer: {
         marginBottom: theme.spacing.xs,
+        overflow: 'hidden',
+        borderTopLeftRadius: 14,
+        borderTopRightRadius: 14,
       },
       content: {
         padding: theme.spacing.sm,
@@ -103,8 +107,8 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         gap: 4,
         paddingHorizontal: theme.spacing.sm,
         paddingVertical: 6,
-        borderRadius: 8,
-        backgroundColor: theme.colors.primary + '25',
+        borderRadius: 10,
+        backgroundColor: theme.colors.primaryLight,
       },
       shareText: {
         fontSize: 12,
@@ -112,7 +116,7 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         color: theme.colors.primary,
       },
     });
-  }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, theme]);
+  }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, theme.colors, theme.spacing, theme.typography, theme.shadow]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);

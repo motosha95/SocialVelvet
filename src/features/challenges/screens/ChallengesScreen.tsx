@@ -93,6 +93,7 @@ export const ChallengesScreen = (_props: Props): React.JSX.Element => {
         padding: theme.spacing.lg,
         marginBottom: theme.spacing.md,
         overflow: 'hidden',
+        ...theme.shadow('md'),
       },
       heroGradient: {
         position: 'absolute',
@@ -169,6 +170,7 @@ export const ChallengesScreen = (_props: Props): React.JSX.Element => {
         borderRadius: 16,
         padding: theme.spacing.md,
         marginBottom: theme.spacing.md,
+        ...theme.shadow('sm'),
       },
       sectionTitle: {
         marginBottom: theme.spacing.sm,

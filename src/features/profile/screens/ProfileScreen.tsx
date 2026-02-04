@@ -68,6 +68,9 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
         justifyContent: 'center',
         alignItems: 'center',
         overflow: 'hidden',
+        borderWidth: 3,
+        borderColor: theme.colors.primary + '40',
+        ...theme.shadow('md'),
       },
       avatarImage: {
         width: 100,
@@ -81,6 +84,7 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
         borderRadius: 16,
         padding: theme.spacing.md,
         marginBottom: theme.spacing.md,
+        ...theme.shadow('sm'),
       },
       fieldLabel: {
         marginTop: theme.spacing.sm,
@@ -114,11 +118,13 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
         alignItems: 'center',
         paddingVertical: theme.spacing.sm,
         paddingHorizontal: theme.spacing.lg,
-        backgroundColor: theme.colors.primary + '20',
-        borderRadius: 12,
+        backgroundColor: theme.colors.primaryLight,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: theme.colors.primary + '30',
       },
     });
-  }, [theme, insets.top, insets.bottom]);
+  }, [theme.colors, theme.spacing, theme.shadow, insets.top, insets.bottom]);
 
   const handlePickImage = async () => {
     try {

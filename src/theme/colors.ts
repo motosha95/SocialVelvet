@@ -4,27 +4,36 @@ export interface ThemeColors {
   text: string;
   mutedText: string;
   primary: string;
+  primaryLight: string;
   danger: string;
+  success: string;
   border: string;
+  shadow: string;
 }
 
-// Brand colors based on logo: Vibrant red, cream/beige, black
+// Brand: Velvet red, warm neutrals, refined palette
 export const lightColors: ThemeColors = {
-  background: '#FFFFFF',
-  surface: '#FAFAFA',
-  text: '#0B0F14',
-  mutedText: '#5B6472',
-  primary: '#DC2626', // Vibrant red from logo
-  danger: '#D12C2C',
-  border: '#E5E5E5',
+  background: '#F8F7F5',
+  surface: '#FFFFFF',
+  text: '#1A1A1A',
+  mutedText: '#6B7280',
+  primary: '#C41E3A',
+  primaryLight: '#FEE2E7',
+  danger: '#DC2626',
+  success: '#059669',
+  border: '#E8E6E3',
+  shadow: 'rgba(0,0,0,0.08)',
 };
 
 export const darkColors: ThemeColors = {
-  background: '#0B0F14', // Black background matching logo
-  surface: '#1A1A1A',
-  text: '#F5F5DC', // Cream/beige matching logo text
-  mutedText: '#A8A8A8',
-  primary: '#E63946', // Slightly brighter red for dark mode visibility
-  danger: '#FF6B6B',
-  border: '#2A2A2A',
+  background: '#0F0F0F',
+  surface: '#1C1C1E',
+  text: '#F5F5F0',
+  mutedText: '#9CA3AF',
+  primary: '#E63946',
+  primaryLight: '#3D1F24',
+  danger: '#EF4444',
+  success: '#10B981',
+  border: '#2C2C2E',
+  shadow: 'rgba(0,0,0,0.4)',
 };

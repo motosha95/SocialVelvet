@@ -44,9 +44,10 @@ export const Button = ({ label, onPress, variant = 'primary', size = 'medium', s
         justifyContent: 'center',
         paddingVertical,
         paddingHorizontal,
-        borderRadius: size === 'small' ? 8 : 12,
+        borderRadius: size === 'small' ? 10 : 14,
         backgroundColor: disabled ? theme.colors.mutedText : backgroundColor,
         opacity: disabled ? 0.5 : 1,
+        ...(variant !== 'secondary' && !disabled ? theme.shadow('sm') : {}),
       },
       label: {
         color: textColor,
@@ -54,13 +55,13 @@ export const Button = ({ label, onPress, variant = 'primary', size = 'medium', s
         fontSize,
       },
     });
-  }, [theme.colors.danger, theme.colors.primary, theme.colors.border, theme.colors.text, theme.colors.mutedText, theme.mode, theme.spacing, theme.typography, variant, size, disabled]);
+  }, [theme, variant, size, disabled]);
 
   return (
     <Pressable 
       accessibilityRole="button" 
       onPress={disabled ? undefined : onPress} 
-      style={[styles.root, style]}
+      style={({ pressed }) => [styles.root, style, pressed && !disabled && { opacity: 0.9 }]}
       disabled={disabled}
     >
       <AppText style={styles.label}>{label}</AppText>

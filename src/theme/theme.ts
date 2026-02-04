@@ -4,6 +4,7 @@ import type { ThemeSpacing } from './spacing';
 import { spacing } from './spacing';
 import type { ThemeTypography } from './typography';
 import { typography } from './typography';
+import { getShadow, type ShadowPreset } from './shadows';
 
 export type ThemeMode = 'light' | 'dark';
 
@@ -12,6 +13,7 @@ export interface Theme {
   colors: ThemeColors;
   spacing: ThemeSpacing;
   typography: ThemeTypography;
+  shadow: (preset: ShadowPreset) => ReturnType<typeof getShadow>;
 }
 
 export const createTheme = (mode: ThemeMode): Theme => {
@@ -21,5 +23,6 @@ export const createTheme = (mode: ThemeMode): Theme => {
     colors,
     spacing,
     typography,
+    shadow: (preset) => getShadow(preset, mode === 'dark'),
   };
 };

@@ -1,6 +1,6 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { StyleSheet, TouchableOpacity } from 'react-native';
+import { Platform, StyleSheet, TouchableOpacity } from 'react-native';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -43,24 +43,38 @@ export const MainTabs = (): React.JSX.Element => {
         backgroundColor: theme.colors.surface,
         borderTopColor: theme.colors.border,
         borderTopWidth: 1,
-        paddingTop: 8,
-        paddingBottom: Math.max(insets.bottom, 8),
-        height: 60 + Math.max(insets.bottom - 8, 0),
+        paddingTop: 3,
+        paddingBottom: Math.max(insets.bottom, 4),
+        height: 72 + Math.max(insets.bottom - 4, 0),
+        ...Platform.select({
+          ios: {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: -4 },
+            shadowOpacity: theme.mode === 'dark' ? 0.3 : 0.06,
+            shadowRadius: 8,
+          },
+          android: { elevation: 8 },
+        }),
       },
       tabBarItem: {
-        paddingVertical: 4,
-        borderRadius: 12,
+        paddingVertical: 6,
+        borderRadius: 14,
         marginHorizontal: 4,
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
       },
       tabBarItemFocused: {
-        backgroundColor: theme.colors.primary + '20', // 20% opacity background
+        backgroundColor: theme.colors.primaryLight,
       },
       tabBarLabel: {
-        fontSize: theme.typography.captionSize,
-        marginTop: 4,
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: 2,
+      },
+      tabIcon: {
+        fontSize: 20,
+        fontWeight: '300',
       },
     });
   }, [theme, insets.bottom]);
@@ -89,8 +103,10 @@ export const MainTabs = (): React.JSX.Element => {
           const icon = getTabIcon(route.name);
           return (
             <AppText 
-              style={{ 
-                fontSize: 24,
+              style={{
+                ...tabBarStyles.tabIcon,
+                marginBottom: 4,
+                color: focused ? theme.colors.primary : theme.colors.mutedText,
                 opacity: focused ? 1 : 0.6,
               }}
             >

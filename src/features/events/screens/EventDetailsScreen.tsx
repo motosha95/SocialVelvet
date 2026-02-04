@@ -623,8 +623,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                 gap: 6,
                 paddingHorizontal: theme.spacing.sm,
                 paddingVertical: 8,
-                borderRadius: 8,
-                backgroundColor: theme.colors.primary + '25',
+                borderRadius: 10,
+                backgroundColor: theme.colors.primaryLight,
               }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
