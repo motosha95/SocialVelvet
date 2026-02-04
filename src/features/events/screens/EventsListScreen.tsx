@@ -27,8 +27,15 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
   const fetchEvents = useEventsStore((s) => s.fetchEvents);
   const refreshEvents = useEventsStore((s) => s.refreshEvents);
 
+  type HostFilter = 'all' | 'following' | 'newHost';
+  const HOST_FILTER_LABELS: Record<HostFilter, string> = {
+    all: 'All',
+    following: 'Following',
+    newHost: 'New',
+  };
   const [isRefreshing, setIsRefreshing] = React.useState<boolean>(false);
   const [searchQuery, setSearchQuery] = React.useState<string>('');
+  const [hostFilter, setHostFilter] = React.useState<HostFilter>('all');
   const [selectedTopics, setSelectedTopics] = React.useState<string[]>([]);
 
   const toggleTopicFilter = React.useCallback((topic: string) => {
@@ -39,6 +46,12 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
 
   const filteredEvents = React.useMemo(() => {
     let result = events;
+
+    if (hostFilter === 'following') {
+      result = result.filter((event) => event.isFromFollowedHost === true);
+    } else if (hostFilter === 'newHost') {
+      result = result.filter((event) => event.isFromFollowedHost !== true);
+    }
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
@@ -58,7 +71,7 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
     }
 
     return result;
-  }, [events, searchQuery, selectedTopics]);
+  }, [events, hostFilter, searchQuery, selectedTopics]);
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -101,41 +114,86 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         alignItems: 'center',
         paddingVertical: theme.spacing.xl,
       },
-      topicTabsContainer: {
-        marginBottom: theme.spacing.md,
+      filterSection: {
+        paddingTop: theme.spacing.sm,
+        marginTop: theme.spacing.xs,
+        marginBottom: theme.spacing.sm,
+        borderTopWidth: 1,
+        borderTopColor: theme.colors.border,
       },
-      topicTabsScroll: {
-        flexGrow: 0,
-        paddingVertical: theme.spacing.xs,
+      filterRowLabel: {
+        fontSize: 10,
+        color: theme.colors.mutedText,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
       },
-      topicTabRow: {
+      hostSegmentedContainer: {
         flexDirection: 'row',
-        gap: theme.spacing.sm,
-        paddingHorizontal: 2,
-      },
-      topicTab: {
-        paddingHorizontal: theme.spacing.md,
-        paddingVertical: theme.spacing.sm,
-        borderRadius: 20,
+        backgroundColor: theme.colors.surface,
+        borderRadius: 8,
+        padding: 2,
         borderWidth: 1,
         borderColor: theme.colors.border,
-        backgroundColor: theme.colors.background,
       },
-      topicTabSelected: {
+      hostSegment: {
+        flex: 1,
+        paddingVertical: 6,
+        paddingHorizontal: theme.spacing.xs,
+        borderRadius: 6,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+      hostSegmentSelected: {
         backgroundColor: theme.colors.primary,
-        borderColor: theme.colors.primary,
       },
-      topicTabText: {
-        fontSize: theme.typography.captionSize,
+      hostSegmentText: {
+        fontSize: 11,
         fontWeight: '500',
         color: theme.colors.text,
       },
-      topicTabTextSelected: {
+      hostSegmentTextSelected: {
         color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
         fontWeight: '600',
       },
+      topicSection: {
+        marginTop: theme.spacing.sm,
+      },
+      topicTabsContainer: {
+        marginBottom: 4,
+      },
+      topicTabsScroll: {
+        flexGrow: 0,
+        paddingVertical: 2,
+      },
+      topicTabRow: {
+        flexDirection: 'row',
+        gap: theme.spacing.xs,
+        paddingHorizontal: 2,
+      },
+      topicChip: {
+        paddingHorizontal: theme.spacing.xs,
+        paddingVertical: 4,
+        borderRadius: 6,
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+      },
+      topicChipSelected: {
+        backgroundColor: theme.colors.primary + '25',
+        borderColor: theme.colors.primary,
+      },
+      topicChipText: {
+        fontSize: 11,
+        fontWeight: '500',
+        color: theme.colors.text,
+      },
+      topicChipTextSelected: {
+        color: theme.colors.primary,
+        fontWeight: '600',
+      },
     });
-  }, [theme.colors.border, theme.colors.surface, theme.colors.primary, theme.colors.background, theme.colors.text, theme.spacing.md, theme.spacing.xl, theme.spacing.sm, theme.spacing.xs, theme.spacing.lg, theme.typography.captionSize, theme.mode, insets.top]);
+  }, [theme.colors.border, theme.colors.surface, theme.colors.primary, theme.colors.background, theme.colors.text, theme.colors.mutedText, theme.spacing.md, theme.spacing.xl, theme.spacing.sm, theme.spacing.xs, theme.spacing.lg, theme.typography.captionSize, theme.mode, insets.top]);
 
   React.useEffect(() => {
     fetchEvents();
@@ -194,33 +252,59 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
           <Button label="Create" onPress={handleCreateEvent} style={styles.createButton} />
         </View>
 
-        <View style={styles.topicTabsContainer}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.topicTabsScroll}
-          >
-            <View style={styles.topicTabRow}>
-              {EVENT_TOPICS.map((topic) => {
-                const selected = selectedTopics.includes(topic);
-                return (
-                  <TouchableOpacity
-                    key={topic}
-                    style={[styles.topicTab, selected && styles.topicTabSelected]}
-                    onPress={() => toggleTopicFilter(topic)}
-                    activeOpacity={0.7}
-                  >
-                    <AppText style={[styles.topicTabText, selected && styles.topicTabTextSelected]}>
-                      {topic}
-                    </AppText>
-                  </TouchableOpacity>
-                );
-              })}
+        <View style={styles.filterSection}>
+          <AppText style={styles.filterRowLabel}>Host</AppText>
+          <View style={styles.hostSegmentedContainer}>
+            {(['all', 'following', 'newHost'] as const).map((filter) => {
+              const selected = hostFilter === filter;
+              return (
+                <TouchableOpacity
+                  key={filter}
+                  style={[styles.hostSegment, selected && styles.hostSegmentSelected]}
+                  onPress={() => setHostFilter(filter)}
+                  activeOpacity={0.7}
+                >
+                  <AppText style={[styles.hostSegmentText, selected && styles.hostSegmentTextSelected]}>
+                    {HOST_FILTER_LABELS[filter]}
+                  </AppText>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.topicSection}>
+            <AppText style={styles.filterRowLabel}>Topic</AppText>
+            <View style={styles.topicTabsContainer}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.topicTabsScroll}
+              >
+                <View style={styles.topicTabRow}>
+                  {EVENT_TOPICS.map((topic) => {
+                    const selected = selectedTopics.includes(topic);
+                    return (
+                      <TouchableOpacity
+                        key={topic}
+                        style={[styles.topicChip, selected && styles.topicChipSelected]}
+                        onPress={() => toggleTopicFilter(topic)}
+                        activeOpacity={0.7}
+                      >
+                        <AppText style={[styles.topicChipText, selected && styles.topicChipTextSelected]}>
+                          {topic}
+                        </AppText>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             </View>
-          </ScrollView>
-          {selectedTopics.length > 0 && (
-            <AppText color="muted" style={{ fontSize: 12, marginTop: theme.spacing.xs }}>
-              {selectedTopics.length} topic{selectedTopics.length === 1 ? '' : 's'} selected • tap to toggle
+          </View>
+          {(selectedTopics.length > 0 || hostFilter !== 'all') && (
+            <AppText color="muted" style={{ fontSize: 10, marginTop: 4 }}>
+              {hostFilter !== 'all' && `${HOST_FILTER_LABELS[hostFilter]} • `}
+              {selectedTopics.length > 0 && `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected • `}
+              tap to toggle
             </AppText>
           )}
         </View>
@@ -237,16 +321,20 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         data={filteredEvents}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <EventCard event={item} onPress={() => handleEventPress(item.id)} />}
-        contentContainerStyle={filteredEvents.length === 0 ? styles.emptyContainer : undefined}
+        contentContainerStyle={
+          filteredEvents.length === 0
+            ? styles.emptyContainer
+            : { paddingBottom: theme.spacing.md }
+        }
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.emptyContainer}>
               <AppText color="muted">
-                {searchQuery.trim() || selectedTopics.length > 0
+                {searchQuery.trim() || selectedTopics.length > 0 || hostFilter !== 'all'
                   ? 'No events match your filters.'
                   : 'No events yet.'}
               </AppText>
-              {!searchQuery.trim() && selectedTopics.length === 0 && (
+              {!searchQuery.trim() && selectedTopics.length === 0 && hostFilter === 'all' && (
                 <Button label="Create your first event" onPress={handleCreateEvent} style={{ marginTop: theme.spacing.md }} />
               )}
             </View>

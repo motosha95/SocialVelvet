@@ -21,6 +21,7 @@ import { followApi } from '../../../api/followApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
 import { TicketCard } from '../../bookings/components/TicketCard';
 import { getAdmittedUserIds } from '../utils/admittedTicketsStore';
+import { shareEvent } from '../utils/shareEvent';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
@@ -612,7 +613,25 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         )}
 
         <View style={styles.header}>
-          <AppText variant="title">{event.title}</AppText>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: theme.spacing.sm }}>
+            <AppText variant="title" style={{ flex: 1 }}>{event.title}</AppText>
+            <TouchableOpacity
+              onPress={() => void shareEvent(event)}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 6,
+                paddingHorizontal: theme.spacing.sm,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: theme.colors.primary + '25',
+              }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <AppText style={{ fontSize: 14 }}>📤</AppText>
+              <AppText style={{ fontSize: 13, fontWeight: '600', color: theme.colors.primary }}>Share</AppText>
+            </TouchableOpacity>
+          </View>
           {event.seriesInterval && (
             <View style={styles.seriesBadge}>
               <AppText style={styles.seriesBadgeText} variant="caption">

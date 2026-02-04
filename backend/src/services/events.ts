@@ -2,6 +2,7 @@ import { prisma } from '../db/client';
 import type { Event, EventAttendee, EventCoHost } from '../types';
 import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
 import { followsService } from './follows';
+import { challengesService } from './challenges';
 import { POINTS_PER_ATTENDANCE } from '../constants/gamification';
 
 export const eventsService = {
@@ -777,6 +778,12 @@ export const eventsService = {
         console.warn('Failed to award points (migration may not be run):', pointsErr);
       }
 
+      try {
+        await challengesService.recordEventAttendance(userId);
+      } catch (chErr) {
+        console.warn('Failed to update challenge progress:', chErr);
+      }
+
       // Create or update ticket record
       await prisma.ticket.upsert({
         where: {
@@ -873,6 +880,12 @@ export const eventsService = {
       });
     } catch (pointsErr) {
       console.warn('Failed to award points (migration may not be run):', pointsErr);
+    }
+
+    try {
+      await challengesService.recordEventAttendance(ticket.userId);
+    } catch (chErr) {
+      console.warn('Failed to update challenge progress:', chErr);
     }
 
     // Update ticket as scanned

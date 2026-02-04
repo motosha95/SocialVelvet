@@ -10,6 +10,7 @@ import { EventsStack } from './EventsStack';
 import { ChatStack } from './ChatStack';
 import { BookingsStack } from './BookingsStack';
 import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
+import { ChallengesScreen } from '../features/challenges/screens/ChallengesScreen';
 import { AppText } from '../components/ui/AppText';
 import { useTheme } from '../theme/useTheme';
 
@@ -25,6 +26,8 @@ const getTabIcon = (routeName: string): string => {
       return '🎫';
     case Routes.App.Profile:
       return '👤';
+    case Routes.App.Challenges:
+      return '🏆';
     default:
       return '•';
   }
@@ -117,6 +120,11 @@ export const MainTabs = (): React.JSX.Element => {
         name={Routes.App.Chat} 
         component={ChatStack} 
         options={{ title: 'Chat' }} 
+      />
+      <Tabs.Screen 
+        name={Routes.App.Challenges} 
+        component={ChallengesScreen} 
+        options={{ title: 'Quests' }} 
       />
       <Tabs.Screen 
         name={Routes.App.Profile} 

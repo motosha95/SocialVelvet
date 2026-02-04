@@ -30,8 +30,44 @@ model User {
   tickets         Ticket[]               @relation("TicketOwner")
   following       Follow[]               @relation("UserFollowing")   // Users this user follows
   followers       Follow[]               @relation("UserFollowers")   // Users who follow this user
+  challengeProgress UserChallenge[]
 
   @@map("users")
+}
+
+model Challenge {
+  id           String   @id @default(uuid())
+  name         String
+  description  String
+  type         String   // e.g. "ATTEND_EVENTS"
+  targetCount  Int
+  rewardPoints Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userProgress UserChallenge[]
+
+  @@map("challenges")
+}
+
+model UserChallenge {
+  id           String    @id @default(uuid())
+  userId       String
+  challengeId  String
+  currentCount Int       @default(0)
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@map("user_challenges")
 }
 
 model Follow {

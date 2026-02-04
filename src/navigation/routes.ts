@@ -8,6 +8,7 @@ export const Routes = {
     Chat: 'App/Chat',
     Profile: 'App/Profile',
     Bookings: 'App/Bookings',
+    Challenges: 'App/Challenges',
   },
   Events: {
     List: 'Events/List',

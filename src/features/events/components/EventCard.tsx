@@ -6,6 +6,7 @@ import { EventImage } from '../../../components/ui/EventImage';
 import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../types';
 import { getSeriesShortLabel } from '../utils/seriesUtils';
+import { shareEvent } from '../utils/shareEvent';
 
 interface EventCardProps {
   event: Event;
@@ -21,27 +22,34 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         backgroundColor: theme.colors.surface,
         borderColor: theme.colors.border,
         borderWidth: 1,
-        borderRadius: 16,
+        borderRadius: 12,
         overflow: 'hidden',
-        marginBottom: theme.spacing.md,
+        marginBottom: theme.spacing.sm,
       },
       imageContainer: {
-        marginBottom: theme.spacing.md,
+        marginBottom: theme.spacing.xs,
       },
       content: {
-        padding: theme.spacing.md,
+        padding: theme.spacing.sm,
       },
       header: {
-        marginBottom: theme.spacing.xs,
+        marginBottom: 4,
+      },
+      titleRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'flex-start',
+        gap: theme.spacing.xs,
       },
       title: {
-        marginBottom: theme.spacing.xs,
+        flex: 1,
+        marginBottom: 2,
       },
       meta: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: theme.spacing.sm,
-        marginTop: theme.spacing.xs,
+        marginTop: 4,
       },
       metaItem: {
         flexDirection: 'row',
@@ -50,11 +58,11 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
       },
       badge: {
         backgroundColor: event.isJoined ? theme.colors.primary : theme.colors.border,
-        paddingHorizontal: theme.spacing.sm,
-        paddingVertical: theme.spacing.xs / 2,
-        borderRadius: 12,
+        paddingHorizontal: theme.spacing.xs,
+        paddingVertical: 2,
+        borderRadius: 8,
         alignSelf: 'flex-start',
-        marginTop: theme.spacing.xs,
+        marginTop: 4,
       },
       badgeText: {
         color: event.isJoined ? (theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF') : theme.colors.text,
@@ -63,11 +71,11 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
       },
       seriesBadge: {
         backgroundColor: theme.colors.primary + '20',
-        paddingHorizontal: theme.spacing.sm,
-        paddingVertical: theme.spacing.xs / 2,
-        borderRadius: 12,
+        paddingHorizontal: theme.spacing.xs,
+        paddingVertical: 2,
+        borderRadius: 8,
         alignSelf: 'flex-start',
-        marginTop: theme.spacing.xs,
+        marginTop: 4,
         marginRight: theme.spacing.xs,
       },
       seriesBadgeText: {
@@ -77,17 +85,31 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
       },
       followedBadge: {
         backgroundColor: theme.colors.primary + '30',
-        paddingHorizontal: theme.spacing.sm,
-        paddingVertical: theme.spacing.xs / 2,
-        borderRadius: 12,
+        paddingHorizontal: theme.spacing.xs,
+        paddingVertical: 2,
+        borderRadius: 8,
         alignSelf: 'flex-start',
-        marginTop: theme.spacing.xs,
+        marginTop: 4,
         marginRight: theme.spacing.xs,
       },
       followedBadgeText: {
         color: theme.colors.primary,
         fontSize: theme.typography.captionSize,
         fontWeight: '600',
+      },
+      shareButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: 6,
+        borderRadius: 8,
+        backgroundColor: theme.colors.primary + '25',
+      },
+      shareText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.colors.primary,
       },
     });
   }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, theme]);
@@ -119,57 +141,56 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
+  const handleShare = React.useCallback(() => {
+    void shareEvent(event);
+  }, [event]);
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
       <View style={styles.card}>
         {event.imageUrl && (
           <View style={styles.imageContainer}>
-            <EventImage imageUrl={event.imageUrl} aspectRatio={16 / 9} />
+            <EventImage imageUrl={event.imageUrl} aspectRatio={2.2} />
           </View>
         )}
         <View style={styles.content}>
           <View style={styles.header}>
-            <AppText variant="title" style={styles.title}>
-              {event.title}
-            </AppText>
-            <AppText color="muted" numberOfLines={2}>
+            <View style={styles.titleRow}>
+              <AppText variant="title" style={[styles.title, { fontSize: 16 }]} numberOfLines={1}>
+                {event.title}
+              </AppText>
+              <TouchableOpacity
+                onPress={handleShare}
+                style={styles.shareButton}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <AppText style={styles.shareText}>📤 Share</AppText>
+              </TouchableOpacity>
+            </View>
+            <AppText color="muted" variant="caption" numberOfLines={1} style={{ lineHeight: 18 }}>
               {event.description}
             </AppText>
           </View>
 
-        <View style={styles.meta}>
-          <View style={styles.metaItem}>
+          <View style={[styles.meta, { marginTop: 6 }]}>
             <AppText color="muted" variant="caption">
-              📅 {formatDate(event.date)}
+              📅 {formatDate(event.date)} · 🕐 {formatTime(event.date)}
             </AppText>
           </View>
-          <View style={styles.metaItem}>
-            <AppText color="muted" variant="caption">
-              🕐 {formatTime(event.date)}
-            </AppText>
-          </View>
-        </View>
-
-        <View style={styles.meta}>
-          <View style={styles.metaItem}>
-            <AppText color="muted" variant="caption">
+          <View style={styles.meta}>
+            <AppText color="muted" variant="caption" numberOfLines={1}>
               📍 {event.location}
             </AppText>
           </View>
-        </View>
-
-        <View style={styles.meta}>
-          <AppText color="muted" variant="caption">
-            👤 {event.organizerName}
-          </AppText>
-          <AppText color="muted" variant="caption">
-            • {event.attendeeCount}
-            {event.maxAttendees ? ` / ${event.maxAttendees}` : ''} attendees
-          </AppText>
-        </View>
+          <View style={styles.meta}>
+            <AppText color="muted" variant="caption">
+              👤 {event.organizerName} · {event.attendeeCount}
+              {event.maxAttendees ? `/${event.maxAttendees}` : ''} going
+            </AppText>
+          </View>
 
         {event.topics && event.topics.length > 0 && (
-          <View style={[styles.meta, { marginTop: theme.spacing.xs, flexWrap: 'wrap', gap: theme.spacing.xs }]}>
+          <View style={[styles.meta, { marginTop: 4, flexWrap: 'wrap', gap: 4 }]}>
             {event.topics.map((t) => (
               <View key={t} style={styles.seriesBadge}>
                 <AppText style={styles.seriesBadgeText} variant="caption">
@@ -180,11 +201,11 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
           </View>
         )}
 
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: theme.spacing.xs }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 4 }}>
           {event.isFromFollowedHost && (
             <View style={styles.followedBadge}>
               <AppText style={styles.followedBadgeText} variant="caption">
-                From host you follow
+                Following
               </AppText>
             </View>
           )}

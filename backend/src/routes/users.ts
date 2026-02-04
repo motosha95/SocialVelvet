@@ -3,6 +3,7 @@ import { authenticate, type AuthRequest } from '../middleware/auth';
 import { prisma } from '../db/client';
 import { AppError } from '../middleware/errorHandler';
 import { followsService } from '../services/follows';
+import { challengesService } from '../services/challenges';
 import { POINTS_PER_ATTENDANCE } from '../constants/gamification';
 import { z } from 'zod';
 
@@ -104,6 +105,19 @@ usersRouter.patch('/me', authenticate, async (req: AuthRequest, res, next) => {
     });
 
     res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get current user's challenges with progress
+usersRouter.get('/me/challenges', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+    const result = await challengesService.getChallengesWithProgress(req.userId);
+    res.json(result);
   } catch (err) {
     next(err);
   }

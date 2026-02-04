@@ -29,6 +29,7 @@ export type AppTabsParamList = {
   [Routes.App.Chat]: NavigatorScreenParams<ChatStackParamList>;
   [Routes.App.Profile]: undefined;
   [Routes.App.Bookings]: NavigatorScreenParams<BookingsStackParamList>;
+  [Routes.App.Challenges]: undefined;
 };
 
 export type RootStackParamList = {
