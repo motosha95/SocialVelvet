@@ -1,5 +1,15 @@
 import React from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Easing,
+  FlatList,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -37,6 +47,14 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
   const [searchQuery, setSearchQuery] = React.useState<string>('');
   const [hostFilter, setHostFilter] = React.useState<HostFilter>('all');
   const [selectedTopics, setSelectedTopics] = React.useState<string[]>([]);
+
+  const flatListRef = React.useRef<FlatList>(null);
+  const filterAnim = React.useRef(new Animated.Value(1)).current;
+  const [showFilters, setShowFilters] = React.useState(true);
+  const lastTargetRef = React.useRef<boolean | null>(null);
+  const HIDE_THRESHOLD = 100;
+  const SHOW_THRESHOLD = 40;
+  const FILTER_HEIGHT = 140;
 
   const toggleTopicFilter = React.useCallback((topic: string) => {
     setSelectedTopics((prev) =>
@@ -216,6 +234,55 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
     navigation.navigate(Routes.Events.Create);
   }, [navigation]);
 
+  const handleScrollToTop = React.useCallback(() => {
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, []);
+
+  const handleScroll = React.useCallback(
+    (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const y = e.nativeEvent.contentOffset.y;
+      const wantShow = y < SHOW_THRESHOLD;
+      const wantHide = y > HIDE_THRESHOLD;
+      const lastTarget = lastTargetRef.current;
+      if (wantHide && lastTarget !== false) {
+        lastTargetRef.current = false;
+        setShowFilters(false);
+        Animated.timing(filterAnim, {
+          toValue: 0,
+          duration: 380,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }).start();
+      } else if (wantShow && lastTarget !== true) {
+        lastTargetRef.current = true;
+        setShowFilters(true);
+        Animated.timing(filterAnim, {
+          toValue: 1,
+          duration: 380,
+          easing: Easing.inOut(Easing.cubic),
+          useNativeDriver: false,
+        }).start();
+      }
+    },
+    [filterAnim]
+  );
+
+  const filterSectionHeight = filterAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, FILTER_HEIGHT],
+    extrapolate: 'clamp',
+  });
+  const filterSectionOpacity = filterAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+  const scrollToTopOpacity = filterAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
   if (isLoading && events.length === 0) {
     return (
       <Screen>
@@ -252,7 +319,17 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
           <Button label="Create" onPress={handleCreateEvent} style={styles.createButton} />
         </View>
 
-        <View style={styles.filterSection}>
+        <Animated.View
+          style={[
+            styles.filterSection,
+            {
+              height: filterSectionHeight,
+              opacity: filterSectionOpacity,
+              overflow: 'hidden',
+              marginBottom: 0,
+            },
+          ]}
+        >
           <AppText style={styles.filterRowLabel}>Host</AppText>
           <View style={styles.hostSegmentedContainer}>
             {(['all', 'following', 'newHost'] as const).map((filter) => {
@@ -307,7 +384,7 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
               tap to toggle
             </AppText>
           )}
-        </View>
+        </Animated.View>
       </View>
 
       {error && (
@@ -318,9 +395,12 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
       )}
 
       <FlatList
+        ref={flatListRef}
         data={filteredEvents}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <EventCard event={item} onPress={() => handleEventPress(item.id)} />}
+        onScroll={handleScroll}
+        scrollEventThrottle={16}
         contentContainerStyle={
           filteredEvents.length === 0
             ? styles.emptyContainer
@@ -343,6 +423,32 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} tintColor={theme.colors.primary} />}
         showsVerticalScrollIndicator={false}
       />
+
+      <Animated.View
+        pointerEvents="box-none"
+        style={{
+          position: 'absolute',
+          right: theme.spacing.md,
+          bottom: insets.bottom + 80,
+          opacity: scrollToTopOpacity,
+        }}
+      >
+        <TouchableOpacity
+          onPress={handleScrollToTop}
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: 22,
+            backgroundColor: theme.colors.primary,
+            justifyContent: 'center',
+            alignItems: 'center',
+            ...theme.shadow('md'),
+          }}
+          activeOpacity={0.8}
+        >
+          <AppText style={{ fontSize: 20, color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF' }}>↑</AppText>
+        </TouchableOpacity>
+      </Animated.View>
     </Screen>
   );
 };
