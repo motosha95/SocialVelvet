@@ -9,7 +9,6 @@ import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
 import { EventImage } from '../../../components/ui/EventImage';
-import { DateDisplay } from '../../../components/ui/DateDisplay';
 import { LocationMap } from '../../../components/ui/LocationMap';
 import { useTheme } from '../../../theme/useTheme';
 import { useEventsStore } from '../../../store/events/eventsStore';
@@ -140,6 +139,64 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         borderRadius: 16,
         padding: theme.spacing.md,
         marginBottom: theme.spacing.md,
+      },
+      detailsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.sm,
+      },
+      detailChip: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: theme.spacing.sm,
+        padding: theme.spacing.md,
+        borderRadius: 14,
+        backgroundColor: theme.colors.background,
+        borderWidth: 1,
+        borderColor: theme.colors.border + '80',
+        minWidth: '47%',
+        flex: 1,
+      },
+      detailChipFull: {
+        minWidth: '100%',
+      },
+      detailIconBox: {
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        justifyContent: 'center',
+        alignItems: 'center',
+      },
+      detailLabel: {
+        fontSize: 11,
+        fontWeight: '600',
+        letterSpacing: 0.5,
+        textTransform: 'uppercase',
+        marginBottom: 2,
+      },
+      detailValue: {
+        fontSize: 15,
+        fontWeight: '600',
+      },
+      mapBlock: {
+        borderRadius: 14,
+        overflow: 'hidden',
+        marginTop: theme.spacing.sm,
+        marginBottom: theme.spacing.md,
+      },
+      topicTag: {
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs,
+        borderRadius: 8,
+        backgroundColor: theme.colors.primary + '18',
+        marginRight: theme.spacing.xs,
+        marginBottom: theme.spacing.xs,
+      },
+      priceBadge: {
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 12,
+        alignSelf: 'flex-start',
       },
       metaRow: {
         flexDirection: 'row',
@@ -608,6 +665,18 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
   };
 
+  const formatDateTime = (dateString: string): string => {
+    const d = new Date(dateString);
+    const date = d.toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    return `${date} · ${time}`;
+  };
+
   if (isLoadingEvent) {
     return (
       <Screen>
@@ -679,24 +748,45 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             Details
           </AppText>
           <View style={styles.card}>
-            <View style={{ marginBottom: theme.spacing.md }}>
-              <AppText color="muted" variant="caption" style={{ marginBottom: theme.spacing.xs }}>
-                📅 Date & Time
-              </AppText>
-              <DateDisplay date={event.date} mode="datetime" />
+            {/* Date & Time — compact chip */}
+            <View style={[styles.detailChip, styles.detailChipFull]}>
+              <View style={[styles.detailIconBox, { backgroundColor: theme.colors.primary + '25' }]}>
+                <AppText style={{ fontSize: 20 }}>📅</AppText>
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Date & Time</AppText>
+                <AppText style={[styles.detailValue, { color: theme.colors.text }]}>{formatDateTime(event.date)}</AppText>
+              </View>
             </View>
-            <View>
-              <AppText color="muted" variant="caption" style={{ marginBottom: theme.spacing.xs }}>
-                📍 Location
-              </AppText>
-              <LocationMap location={event.location} height={200} />
+
+            {/* Location — full chip + map */}
+            <View style={{ marginTop: theme.spacing.sm }}>
+              <View style={[styles.detailChip, styles.detailChipFull]}>
+                <View style={[styles.detailIconBox, { backgroundColor: theme.colors.primary + '18' }]}>
+                  <AppText style={{ fontSize: 20 }}>📍</AppText>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Location</AppText>
+                  <AppText style={[styles.detailValue, { color: theme.colors.text }]} numberOfLines={2}>
+                    {event.location || '—'}
+                  </AppText>
+                </View>
+              </View>
+              {event.location && (
+                <View style={styles.mapBlock}>
+                  <LocationMap location={event.location} height={160} />
+                </View>
+              )}
             </View>
-            <View style={[styles.metaRow, { justifyContent: 'space-between', flexWrap: 'wrap' }]}>
-              <View style={styles.metaRow}>
-                <AppText color="muted" variant="caption">
-                  👤
-                </AppText>
-                <AppText>Organized by {event.organizerName}</AppText>
+
+            {/* Organized by — full chip with Follow */}
+            <View style={[styles.detailChip, styles.detailChipFull, { marginTop: theme.spacing.sm }]}>
+              <View style={[styles.detailIconBox, { backgroundColor: theme.colors.primary + '18' }]}>
+                <AppText style={{ fontSize: 20 }}>👤</AppText>
+              </View>
+              <View style={{ flex: 1 }}>
+                <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Organized by</AppText>
+                <AppText style={[styles.detailValue, { color: theme.colors.text }]}>{event.organizerName}</AppText>
               </View>
               {userId && event.organizerId !== userId && (
                 <Button
@@ -708,43 +798,83 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                 />
               )}
             </View>
+
+            {/* Topics — tag pills */}
             {event.topics && event.topics.length > 0 && (
-              <View style={styles.metaRow}>
-                <AppText color="muted" variant="caption">
-                  🏷️
+              <View style={{ marginTop: theme.spacing.md }}>
+                <AppText style={[styles.detailLabel, { color: theme.colors.mutedText, marginBottom: theme.spacing.sm }]}>
+                  🏷️ Topics
                 </AppText>
-                <AppText>Topics: {event.topics.join(', ')}</AppText>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                  {event.topics.map((t, i) => (
+                    <View key={i} style={styles.topicTag}>
+                      <AppText style={{ fontSize: 13, fontWeight: '600', color: theme.colors.primary }}>{t}</AppText>
+                    </View>
+                  ))}
+                </View>
               </View>
             )}
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                👥
-              </AppText>
-              <AppText>
-                {event.attendeeCount}
-                {event.maxAttendees ? ` / ${event.maxAttendees}` : ''} attendees
-              </AppText>
-            </View>
-            <View style={styles.metaRow}>
-              <AppText color="muted" variant="caption">
-                💰
-              </AppText>
-              <View style={{ flex: 1 }}>
-                {event.isPaid ? (
-                  event.pricingTiers && event.pricingTiers.length > 0 ? (
-                    event.pricingTiers.map((tier, idx) => (
-                      <AppText key={idx}>
-                        {tier.name}: {tier.price} {event.currency || 'AED'}
+
+            {/* Attendees & Price — side-by-side or stacked when multiple tiers */}
+            <View style={[styles.detailsGrid, { marginTop: theme.spacing.md }]}>
+              <View style={styles.detailChip}>
+                <View style={[styles.detailIconBox, { backgroundColor: theme.colors.primary + '18' }]}>
+                  <AppText style={{ fontSize: 20 }}>👥</AppText>
+                </View>
+                <View>
+                  <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Attendees</AppText>
+                  <AppText style={[styles.detailValue, { color: theme.colors.text }]}>
+                    {event.attendeeCount}
+                    {event.maxAttendees ? ` / ${event.maxAttendees}` : ''}
+                  </AppText>
+                </View>
+              </View>
+              <View
+                style={[
+                  styles.detailChip,
+                  event.pricingTiers && event.pricingTiers.length > 1 && styles.detailChipFull,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.detailIconBox,
+                    {
+                      backgroundColor: event.isPaid ? theme.colors.primary + '18' : '#10B981' + '25',
+                    },
+                  ]}
+                >
+                  <AppText style={{ fontSize: 20 }}>💰</AppText>
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Price</AppText>
+                  {event.isPaid ? (
+                    event.pricingTiers && event.pricingTiers.length > 0 ? (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs }}>
+                        {event.pricingTiers.map((tier, idx) => (
+                          <View
+                            key={idx}
+                            style={{
+                              paddingHorizontal: theme.spacing.sm,
+                              paddingVertical: 2,
+                              borderRadius: 6,
+                              backgroundColor: theme.colors.border + '60',
+                            }}
+                          >
+                            <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text }}>
+                              {tier.name}: {tier.price} {event.currency || 'AED'}
+                            </AppText>
+                          </View>
+                        ))}
+                      </View>
+                    ) : (
+                      <AppText style={[styles.detailValue, { color: theme.colors.text }]}>
+                        {event.price != null ? `${event.price} ${event.currency || 'AED'}` : 'Paid'}
                       </AppText>
-                    ))
+                    )
                   ) : (
-                    <AppText>
-                      {event.price != null ? `${event.price} ${event.currency || 'AED'}` : 'Paid event'}
-                    </AppText>
-                  )
-                ) : (
-                  <AppText>Free event</AppText>
-                )}
+                    <AppText style={[styles.detailValue, { color: '#10B981', fontWeight: '700' }]}>Free</AppText>
+                  )}
+                </View>
               </View>
             </View>
           </View>
