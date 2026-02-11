@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "events" ADD COLUMN "price" DOUBLE PRECISION,
+ADD COLUMN "currency" TEXT NOT NULL DEFAULT 'AED';

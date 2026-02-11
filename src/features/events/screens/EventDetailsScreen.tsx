@@ -26,6 +26,7 @@ import type { EventsStackParamList, AppTabsParamList } from '../../../navigation
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
 import { getSeriesLabel } from '../utils/seriesUtils';
+import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../utils/pointsUtils';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -54,6 +55,9 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [ticketModalVisible, setTicketModalVisible] = React.useState<boolean>(false);
   const [showTicketAfterJoin, setShowTicketAfterJoin] = React.useState<boolean>(false);
   const [admittedUserIds, setAdmittedUserIds] = React.useState<Set<string>>(new Set());
+  const [admissionCelebrationVisible, setAdmissionCelebrationVisible] = React.useState<boolean>(false);
+  const [admissionCelebrationPoints, setAdmissionCelebrationPoints] = React.useState<number | null>(null);
+  const hasShownAdmissionCelebrationRef = React.useRef<boolean>(false);
   const [isFollowingHost, setIsFollowingHost] = React.useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
@@ -67,6 +71,31 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
       setAdmittedUserIds(admitted);
     }, [eventId])
   );
+
+  // Poll for admission when ticket modal is visible (attendee waiting for their ticket to be scanned)
+  React.useEffect(() => {
+    if (!ticketModalVisible || !userId || !event?.isJoined) return;
+
+    const checkAdmission = async (): Promise<void> => {
+      if (hasShownAdmissionCelebrationRef.current) return;
+      try {
+        const list = await eventsApi.getAttendees(eventId);
+        const me = list.find((a) => a.userId === userId);
+        if (me?.admittedAt) {
+          hasShownAdmissionCelebrationRef.current = true;
+          const points = calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers));
+          setAdmissionCelebrationPoints(points);
+          setAdmissionCelebrationVisible(true);
+        }
+      } catch {
+        // Ignore poll errors
+      }
+    };
+
+    const interval = setInterval(checkAdmission, 3000);
+    void checkAdmission(); // Check immediately
+    return () => clearInterval(interval);
+  }, [ticketModalVisible, userId, eventId, event?.isJoined, event?.price, event?.pricingTiers]);
 
   // Check if user can edit (organizer or co-host with permission)
   const canEdit = React.useMemo(() => {
@@ -696,12 +725,74 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                 {event.maxAttendees ? ` / ${event.maxAttendees}` : ''} attendees
               </AppText>
             </View>
+            <View style={styles.metaRow}>
+              <AppText color="muted" variant="caption">
+                💰
+              </AppText>
+              <View style={{ flex: 1 }}>
+                {event.isPaid ? (
+                  event.pricingTiers && event.pricingTiers.length > 0 ? (
+                    event.pricingTiers.map((tier, idx) => (
+                      <AppText key={idx}>
+                        {tier.name}: {tier.price} {event.currency || 'AED'}
+                      </AppText>
+                    ))
+                  ) : (
+                    <AppText>
+                      {event.price != null ? `${event.price} ${event.currency || 'AED'}` : 'Paid event'}
+                    </AppText>
+                  )
+                ) : (
+                  <AppText>Free event</AppText>
+                )}
+              </View>
+            </View>
           </View>
         </View>
 
         {error && (
           <View style={styles.errorContainer}>
             <AppText color="muted">{error}</AppText>
+          </View>
+        )}
+
+        {/* Points reward callout - show for non-organizers */}
+        {event.organizerId !== userId && (
+          <View
+            style={{
+              marginBottom: theme.spacing.md,
+              padding: theme.spacing.md,
+              borderRadius: 12,
+              backgroundColor: theme.colors.primaryLight,
+              borderWidth: 1,
+              borderColor: theme.colors.primary + '40',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: theme.spacing.sm,
+            }}
+          >
+            <View
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: theme.colors.primary + '30',
+                justifyContent: 'center',
+                alignItems: 'center',
+              }}
+            >
+              <AppText style={{ fontSize: 20 }}>🎯</AppText>
+            </View>
+            <View style={{ flex: 1 }}>
+              <AppText style={{ fontWeight: '600', color: theme.colors.primary, marginBottom: 2 }}>
+                Earn {calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers))} points
+              </AppText>
+              <AppText color="muted" variant="caption">
+                {event.isJoined
+                  ? 'Get your ticket scanned at the event to collect your points!'
+                  : 'Join & attend to earn points when your ticket is scanned'}
+              </AppText>
+            </View>
           </View>
         )}
 
@@ -1008,6 +1099,92 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             </View>
           </TouchableOpacity>
         </Modal>
+
+        {/* Attendee admission celebration popup (shown when ticket is scanned while viewing ticket) */}
+        {event && admissionCelebrationVisible && (
+          <Modal
+            visible={admissionCelebrationVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => {
+              setAdmissionCelebrationVisible(false);
+              setAdmissionCelebrationPoints(null);
+            }}
+          >
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: theme.spacing.lg,
+              }}
+              activeOpacity={1}
+              onPress={() => {
+                setAdmissionCelebrationVisible(false);
+                setAdmissionCelebrationPoints(null);
+              }}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
+                style={{
+                  backgroundColor: theme.colors.surface,
+                  borderRadius: 24,
+                  padding: theme.spacing.xl,
+                  alignItems: 'center',
+                  minWidth: 280,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                  ...theme.shadow('lg'),
+                }}
+              >
+                <AppText style={{ fontSize: 56, marginBottom: theme.spacing.sm }}>🎉</AppText>
+                <AppText variant="title" style={{ marginBottom: theme.spacing.xs, textAlign: 'center' }}>
+                  You're in!
+                </AppText>
+                {admissionCelebrationPoints != null && admissionCelebrationPoints > 0 ? (
+                  <View
+                    style={{
+                      marginTop: theme.spacing.md,
+                      marginBottom: theme.spacing.lg,
+                      paddingHorizontal: theme.spacing.lg,
+                      paddingVertical: theme.spacing.md,
+                      backgroundColor: theme.colors.primaryLight,
+                      borderRadius: 16,
+                      borderWidth: 2,
+                      borderColor: theme.colors.primary + '50',
+                    }}
+                  >
+                    <AppText color="muted" variant="caption" style={{ marginBottom: 4 }}>
+                      You earned
+                    </AppText>
+                    <AppText
+                      style={{
+                        fontSize: 32,
+                        fontWeight: '700',
+                        color: theme.colors.primary,
+                      }}
+                    >
+                      {admissionCelebrationPoints} points
+                    </AppText>
+                  </View>
+                ) : (
+                  <AppText color="muted" style={{ marginTop: theme.spacing.sm, marginBottom: theme.spacing.lg, textAlign: 'center' }}>
+                    Your ticket has been verified
+                  </AppText>
+                )}
+                <Button
+                  label="Awesome!"
+                  onPress={() => {
+                    setAdmissionCelebrationVisible(false);
+                    setAdmissionCelebrationPoints(null);
+                  }}
+                />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+        )}
 
         {/* Ticket Modal */}
         {event && event.isTicketed && event.isJoined && (

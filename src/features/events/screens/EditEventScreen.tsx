@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Modal, FlatList, Pressable } from 'react-native';
+import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, ActivityIndicator, Modal, FlatList, Pressable, Switch } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -16,7 +16,7 @@ import { uploadApi } from '../../../api/uploadApi';
 import { useEventsStore } from '../../../store/events/eventsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
-import type { Event } from '../types';
+import type { Event, PricingTier } from '../types';
 import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Edit>, BottomTabScreenProps<AppTabsParamList>>;
@@ -39,6 +39,12 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
   const [error, setError] = React.useState<string | null>(null);
   const [topics, setTopics] = React.useState<string[]>([]);
   const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
+  const [isPaid, setIsPaid] = React.useState<boolean>(false);
+  const [usePricingTiers, setUsePricingTiers] = React.useState<boolean>(false);
+  const [price, setPrice] = React.useState<string>('');
+  const [pricingTiers, setPricingTiers] = React.useState<Array<{ name: string; price: string }>>([{ name: '', price: '' }]);
+  const MAX_TIERS = 4;
+  const CURRENCY = 'AED';
   const [originalEvent, setOriginalEvent] = React.useState<Event | null>(null);
   const [showSeriesUpdateModal, setShowSeriesUpdateModal] = React.useState<boolean>(false);
   const [pendingUpdateRequest, setPendingUpdateRequest] = React.useState<{
@@ -48,6 +54,10 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
     date?: string;
     maxAttendees?: number;
     imageUrl?: string | null;
+    isPaid?: boolean;
+    price?: number | null;
+    pricingTiers?: PricingTier[] | null;
+    currency?: string;
     topics?: string[];
   } | null>(null);
 
@@ -245,6 +255,14 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
           setImageUri(event.imageUrl);
         }
 
+        setIsPaid(event.isPaid ?? false);
+        setPrice(event.price != null ? event.price.toString() : '');
+        setUsePricingTiers(!!(event.pricingTiers && event.pricingTiers.length > 0));
+        setPricingTiers(
+          event.pricingTiers && event.pricingTiers.length > 0
+            ? event.pricingTiers.map((t) => ({ name: t.name, price: t.price.toString() }))
+            : [{ name: '', price: '' }]
+        );
         setTopics(event.topics ?? []);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load event');
@@ -282,6 +300,22 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
       if (isNaN(max) || max < 1) {
         setError('Max attendees must be a positive number');
         return false;
+      }
+    }
+
+    if (isPaid) {
+      if (usePricingTiers) {
+        const validTiers = pricingTiers.filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0);
+        if (validTiers.length === 0) {
+          setError('Add at least one pricing tier with a name and valid price');
+          return false;
+        }
+      } else {
+        const priceNum = parseFloat(price.trim());
+        if (!price.trim() || isNaN(priceNum) || priceNum <= 0) {
+          setError('Please enter a valid price for the paid event');
+          return false;
+        }
       }
     }
 
@@ -338,6 +372,10 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
       date?: string;
       maxAttendees?: number;
       imageUrl?: string | null;
+      isPaid?: boolean;
+      price?: number | null;
+      pricingTiers?: PricingTier[] | null;
+      currency?: string;
       topics?: string[];
     } = {};
 
@@ -359,6 +397,22 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
       updateRequest.imageUrl = null;
     }
 
+    updateRequest.isPaid = isPaid;
+    if (isPaid) {
+      updateRequest.currency = CURRENCY;
+      if (usePricingTiers) {
+        updateRequest.pricingTiers = pricingTiers
+          .filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0)
+          .map((t) => ({ name: t.name.trim(), price: parseFloat(t.price.trim()) }));
+        updateRequest.price = null;
+      } else {
+        updateRequest.price = price.trim() ? parseFloat(price.trim()) : null;
+        updateRequest.pricingTiers = null;
+      }
+    } else {
+      updateRequest.price = null;
+      updateRequest.pricingTiers = null;
+    }
     updateRequest.topics = topics.length > 0 ? topics : [];
 
     return updateRequest;
@@ -614,6 +668,131 @@ export const EditEventScreen = ({ route, navigation }: Props): React.JSX.Element
           <AppText color="muted" style={styles.hint}>
             Leave empty for unlimited attendees
           </AppText>
+
+          <View style={[styles.row, { marginTop: theme.spacing.md, alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.fieldLabel} color="muted">
+                Paid Event
+              </AppText>
+              <AppText color="muted" style={styles.hint}>
+                {isPaid ? 'This event requires payment to attend' : 'Free event - no payment required'}
+              </AppText>
+            </View>
+            <Switch
+              value={isPaid}
+              onValueChange={setIsPaid}
+              disabled={isSubmitting}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+              thumbColor={theme.mode === 'dark' ? '#FFFFFF' : '#FFFFFF'}
+            />
+          </View>
+
+          {isPaid && (
+            <>
+              <View style={{ flexDirection: 'row', gap: theme.spacing.sm, marginBottom: theme.spacing.sm }}>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: theme.spacing.sm,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    backgroundColor: !usePricingTiers ? theme.colors.primary : theme.colors.background,
+                  }}
+                  onPress={() => setUsePricingTiers(false)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={{ color: !usePricingTiers ? (theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF') : theme.colors.text, fontWeight: '600' }}>Single price</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: theme.spacing.md,
+                    paddingVertical: theme.spacing.sm,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    backgroundColor: usePricingTiers ? theme.colors.primary : theme.colors.background,
+                  }}
+                  onPress={() => setUsePricingTiers(true)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={{ color: usePricingTiers ? (theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF') : theme.colors.text, fontWeight: '600' }}>Pricing tiers (up to {MAX_TIERS})</AppText>
+                </TouchableOpacity>
+              </View>
+              {!usePricingTiers ? (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Price ({CURRENCY}) *
+                  </AppText>
+                  <TextInput
+                    value={price}
+                    onChangeText={setPrice}
+                    style={styles.input}
+                    placeholder="0.00"
+                    placeholderTextColor={theme.colors.mutedText}
+                    keyboardType="decimal-pad"
+                    editable={!isSubmitting}
+                  />
+                </>
+              ) : (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Tier name & price ({CURRENCY}) *
+                  </AppText>
+                  {pricingTiers.map((tier, index) => (
+                    <View key={index} style={[styles.row, { marginBottom: theme.spacing.xs, alignItems: 'center', gap: theme.spacing.xs }]}>
+                      <TextInput
+                        value={tier.name}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], name: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="e.g. Guys, Girls, VIP"
+                        placeholderTextColor={theme.colors.mutedText}
+                        editable={!isSubmitting}
+                        maxLength={50}
+                      />
+                      <TextInput
+                        value={tier.price}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], price: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { width: 80 }]}
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.mutedText}
+                        keyboardType="decimal-pad"
+                        editable={!isSubmitting}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setPricingTiers((prev) => prev.filter((_, i) => i !== index))}
+                        disabled={isSubmitting || pricingTiers.length <= 1}
+                        style={{ padding: theme.spacing.xs }}
+                      >
+                        <AppText style={{ color: theme.colors.danger, fontSize: 18 }}>×</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {pricingTiers.length < MAX_TIERS && (
+                    <TouchableOpacity
+                      onPress={() => setPricingTiers((prev) => [...prev, { name: '', price: '' }])}
+                      disabled={isSubmitting}
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      <AppText style={{ color: theme.colors.primary, fontWeight: '600' }}>+ Add tier</AppText>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </>
+          )}
 
           <Button 
             label={isSubmitting ? 'Saving...' : 'Save Changes'} 

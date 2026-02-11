@@ -4,7 +4,7 @@ import { prisma } from '../db/client';
 import { AppError } from '../middleware/errorHandler';
 import { followsService } from '../services/follows';
 import { challengesService } from '../services/challenges';
-import { POINTS_PER_ATTENDANCE } from '../constants/gamification';
+import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../constants/gamification';
 import { z } from 'zod';
 
 export const usersRouter = express.Router();
@@ -56,13 +56,22 @@ usersRouter.get('/me', authenticate, async (req: AuthRequest, res, next) => {
 
     // Sync points: if user has admitted events but points are lower than expected, recalculate
     try {
-      const admittedCount = await prisma.eventAttendee.count({
+      const admittedAttendees = await prisma.eventAttendee.findMany({
         where: {
           userId: req.userId,
           admittedAt: { not: null },
         },
+        include: {
+          event: { select: { price: true, pricingTiers: true } },
+        },
       });
-      const expectedPoints = admittedCount * POINTS_PER_ATTENDANCE;
+      const expectedPoints = admittedAttendees.reduce((sum, a) => {
+        const effectivePrice = getEffectivePriceForPoints(
+          a.event.price != null ? Number(a.event.price) : null,
+          Array.isArray(a.event.pricingTiers) ? (a.event.pricingTiers as Array<{ name: string; price: number }>) : null
+        );
+        return sum + calculatePointsForAttendance(effectivePrice);
+      }, 0);
       const currentPoints = user.points ?? 0;
       if (expectedPoints > currentPoints) {
         await prisma.user.update({

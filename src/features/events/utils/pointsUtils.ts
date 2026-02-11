@@ -1,11 +1,9 @@
 /**
- * Gamification constants.
- * Points are awarded when a user's ticket is scanned (they actually attend).
- * Formula: 5 points minimum (free events) + 10% of event price (paid events).
- * Example: 50 AED → 5 + 5 = 10 points
+ * Points calculation for event attendance.
+ * Must match backend formula: 5 base + 10% of price for paid events.
  */
-export const POINTS_BASE = 5;
-export const POINTS_PRICE_PERCENT = 0.1;
+const POINTS_BASE = 5;
+const POINTS_PRICE_PERCENT = 0.1;
 
 export function calculatePointsForAttendance(eventPrice: number | null | undefined): number {
   if (eventPrice == null || eventPrice <= 0) {
@@ -14,7 +12,7 @@ export function calculatePointsForAttendance(eventPrice: number | null | undefin
   return POINTS_BASE + Math.floor(eventPrice * POINTS_PRICE_PERCENT);
 }
 
-/** Effective price for points: use average of tiers when present, else single price */
+/** Effective price for points/display: average of tiers when present, else single price */
 export function getEffectivePriceForPoints(
   price: number | null | undefined,
   pricingTiers: Array<{ name: string; price: number }> | null | undefined

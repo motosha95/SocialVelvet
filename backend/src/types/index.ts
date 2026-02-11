@@ -34,6 +34,10 @@ export interface Event {
   maxAttendees?: number;
   isJoined: boolean;
   isTicketed?: boolean; // Whether this is a ticketed event
+  isPaid?: boolean; // Whether this is a paid event (vs free)
+  price?: number; // Single price (when no tiers)
+  pricingTiers?: PricingTier[]; // Up to 4 tiers: { name, price }
+  currency?: string; // Currency code (default AED)
   topics?: string[]; // Up to 3 topics from predefined list
   canEdit?: boolean; // Whether current user can edit
   isFromFollowedHost?: boolean; // Whether the organizer is someone the current user follows
@@ -43,6 +47,11 @@ export interface Event {
   seriesIndex?: number; // Index of this event in the series (0-based)
   createdAt: string;
   updatedAt: string;
+}
+
+export interface PricingTier {
+  name: string;
+  price: number;
 }
 
 export interface EventCoHost {
@@ -61,6 +70,10 @@ export interface CreateEventRequest {
   maxAttendees?: number;
   imageUrl?: string;
   isTicketed?: boolean; // If true, creates a ticketed event
+  isPaid?: boolean; // If true, creates a paid event (vs free)
+  price?: number; // Single price (when not using tiers)
+  pricingTiers?: PricingTier[]; // Up to 4 tiers: { name, price }
+  currency?: string; // Currency code (default AED)
   topics?: string[]; // Up to 3 from predefined list
 }
 
@@ -71,6 +84,10 @@ export interface UpdateEventRequest {
   date?: string;
   maxAttendees?: number;
   imageUrl?: string;
+  isPaid?: boolean;
+  price?: number | null;
+  pricingTiers?: PricingTier[] | null;
+  currency?: string;
   topics?: string[];
 }
 

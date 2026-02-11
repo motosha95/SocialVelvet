@@ -93,7 +93,11 @@ model Event {
   date         DateTime
   imageUrl     String?
   maxAttendees Int?
-  isTicketed   Boolean  @default(false) // Whether this is a ticketed event
+  isTicketed   Boolean  @default(true) // All events have tickets
+  isPaid       Boolean  @default(false) // Whether this is a paid event (vs free)
+  price        Float?   // Single price (when no tiers); legacy / fallback
+  pricingTiers Json?   // Optional: [{ name: string, price: number }], max 4 tiers
+  currency     String   @default("AED") // Currency code
   topics       String[] @default([])   // Up to 3 topics from predefined list
   seriesId     String?  // ID linking events in a series (UUID of first event)
   seriesInterval String? // '1week' | '2weeks' | '3weeks' | '1month'

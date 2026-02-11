@@ -16,7 +16,7 @@ import { uploadApi } from '../../../api/uploadApi';
 import { useEventsStore } from '../../../store/events/eventsStore';
 import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
-import type { SeriesInterval } from '../types';
+import type { SeriesInterval, PricingTier } from '../types';
 import { generateSeriesDates, MAX_SERIES_EVENTS } from '../utils/seriesUtils';
 import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
 
@@ -40,7 +40,12 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
   const [topics, setTopics] = React.useState<string[]>([]);
   const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
-  const [isTicketed, setIsTicketed] = React.useState<boolean>(false);
+  const [isPaid, setIsPaid] = React.useState<boolean>(false);
+  const [usePricingTiers, setUsePricingTiers] = React.useState<boolean>(false);
+  const [price, setPrice] = React.useState<string>('');
+  const [pricingTiers, setPricingTiers] = React.useState<Array<{ name: string; price: string }>>([{ name: '', price: '' }]);
+  const MAX_TIERS = 4;
+  const CURRENCY = 'AED';
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -239,6 +244,23 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
       }
     }
 
+    // Paid events: require either single price or at least one valid tier
+    if (isPaid) {
+      if (usePricingTiers) {
+        const validTiers = pricingTiers.filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0);
+        if (validTiers.length === 0) {
+          setError('Add at least one pricing tier with a name and valid price');
+          return false;
+        }
+      } else {
+        const priceNum = parseFloat(price.trim());
+        if (!price.trim() || isNaN(priceNum) || priceNum <= 0) {
+          setError('Please enter a valid price for the paid event');
+          return false;
+        }
+      }
+    }
+
     return true;
   };
 
@@ -305,7 +327,10 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         date: string;
         maxAttendees?: number;
         imageUrl?: string;
-        isTicketed?: boolean;
+        isPaid?: boolean;
+        price?: number;
+        pricingTiers?: PricingTier[];
+        currency?: string;
         topics?: string[];
         seriesInterval?: SeriesInterval;
         seriesCount?: number;
@@ -324,8 +349,16 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
         baseRequest.imageUrl = imageUri;
       }
 
-      if (isTicketed) {
-        baseRequest.isTicketed = true;
+      if (isPaid) {
+        baseRequest.isPaid = true;
+        baseRequest.currency = CURRENCY;
+        if (usePricingTiers) {
+          baseRequest.pricingTiers = pricingTiers
+            .filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0)
+            .map((t) => ({ name: t.name.trim(), price: parseFloat(t.price.trim()) }));
+        } else {
+          baseRequest.price = parseFloat(price.trim());
+        }
       }
 
       if (topics.length > 0) {
@@ -549,20 +582,113 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
           <View style={[styles.row, { marginTop: theme.spacing.md, alignItems: 'center', justifyContent: 'space-between' }]}>
             <View style={{ flex: 1 }}>
               <AppText style={styles.fieldLabel} color="muted">
-                Ticketed Event
+                Paid Event
               </AppText>
               <AppText color="muted" style={styles.hint}>
-                All attendees will receive a digital ticket
+                {isPaid ? 'This event requires payment to attend' : 'Free event - no payment required'}
               </AppText>
             </View>
             <Switch
-              value={isTicketed}
-              onValueChange={setIsTicketed}
+              value={isPaid}
+              onValueChange={setIsPaid}
               disabled={isSubmitting}
               trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
               thumbColor={theme.mode === 'dark' ? '#FFFFFF' : '#FFFFFF'}
             />
           </View>
+
+          {isPaid && (
+            <>
+              <View style={[styles.row, { alignItems: 'center', marginBottom: theme.spacing.sm }]}>
+                <TouchableOpacity
+                  style={[styles.seriesOption, !usePricingTiers && styles.seriesOptionSelected]}
+                  onPress={() => setUsePricingTiers(false)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={[styles.seriesOptionText, !usePricingTiers && styles.seriesOptionTextSelected]}>Single price</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.seriesOption, usePricingTiers && styles.seriesOptionSelected]}
+                  onPress={() => setUsePricingTiers(true)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={[styles.seriesOptionText, usePricingTiers && styles.seriesOptionTextSelected]}>Pricing tiers (up to {MAX_TIERS})</AppText>
+                </TouchableOpacity>
+              </View>
+              {!usePricingTiers ? (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Price ({CURRENCY}) *
+                  </AppText>
+                  <TextInput
+                    value={price}
+                    onChangeText={setPrice}
+                    style={styles.input}
+                    placeholder="0.00"
+                    placeholderTextColor={theme.colors.mutedText}
+                    keyboardType="decimal-pad"
+                    editable={!isSubmitting}
+                  />
+                </>
+              ) : (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Tier name & price ({CURRENCY}) *
+                  </AppText>
+                  {pricingTiers.map((tier, index) => (
+                    <View key={index} style={[styles.row, { marginBottom: theme.spacing.xs, alignItems: 'center', gap: theme.spacing.xs }]}>
+                      <TextInput
+                        value={tier.name}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], name: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="e.g. Guys, Girls, VIP"
+                        placeholderTextColor={theme.colors.mutedText}
+                        editable={!isSubmitting}
+                        maxLength={50}
+                      />
+                      <TextInput
+                        value={tier.price}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], price: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { width: 80 }]}
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.mutedText}
+                        keyboardType="decimal-pad"
+                        editable={!isSubmitting}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setPricingTiers((prev) => prev.filter((_, i) => i !== index))}
+                        disabled={isSubmitting || pricingTiers.length <= 1}
+                        style={{ padding: theme.spacing.xs }}
+                      >
+                        <AppText style={{ color: theme.colors.danger, fontSize: 18 }}>×</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {pricingTiers.length < MAX_TIERS && (
+                    <TouchableOpacity
+                      onPress={() => setPricingTiers((prev) => [...prev, { name: '', price: '' }])}
+                      disabled={isSubmitting}
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      <AppText style={{ color: theme.colors.primary, fontWeight: '600' }}>+ Add tier</AppText>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </>
+          )}
 
           <Button 
             label={isSubmitting ? 'Creating...' : 'Create Event'} 

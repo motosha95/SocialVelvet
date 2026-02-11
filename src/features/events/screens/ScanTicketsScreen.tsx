@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, View, Alert, ActivityIndicator, Platform } from 'react-native';
+import { StyleSheet, View, Alert, ActivityIndicator, Modal, TouchableOpacity } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Audio } from 'expo-av';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -38,6 +38,8 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
   const [isVerifying, setIsVerifying] = React.useState<boolean>(false);
   const lastScannedRef = React.useRef<{ ticketNumber: string; timestamp: number } | null>(null);
   const [sound, setSound] = React.useState<Audio.Sound | null>(null);
+  const [celebrationVisible, setCelebrationVisible] = React.useState<boolean>(false);
+  const [celebrationPoints, setCelebrationPoints] = React.useState<number | null>(null);
 
   // Initialize audio mode
   React.useEffect(() => {
@@ -418,24 +420,9 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
           // Play success sound
           void playSuccessSound();
 
-          Alert.alert(
-            'Ticket Verified ✓',
-            result.pointsAwarded
-              ? `Attendee admitted! They earned ${result.pointsAwarded} points for attending.`
-              : `Ticket ${ticketData.ticketNumber} has been verified and the attendee has been admitted.`,
-            [
-              {
-                text: 'Scan Another',
-                onPress: () => {
-                  // Add a small delay before resuming to prevent immediate re-scan
-                  setTimeout(() => {
-                    setIsScanning(true);
-                    setIsVerifying(false);
-                  }, 500);
-                },
-              },
-            ]
-          );
+          // Show celebrating popup with points
+          setCelebrationPoints(result.pointsAwarded ?? null);
+          setCelebrationVisible(true);
         } catch (apiError) {
           // Handle API errors (network, invalid ticket, etc.)
           const errorMessage =
@@ -512,21 +499,9 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
               // Play success sound
               void playSuccessSound();
 
-              Alert.alert(
-                'Ticket Verified ✓ (Local)',
-                `Ticket ${ticketData.ticketNumber} has been verified locally. Note: Backend endpoint not yet implemented.`,
-                [
-                  {
-                    text: 'Scan Another',
-                    onPress: () => {
-                      setTimeout(() => {
-                        setIsScanning(true);
-                        setIsVerifying(false);
-                      }, 500);
-                    },
-                  },
-                ]
-              );
+              // Local verification - no points from backend
+              setCelebrationPoints(null);
+              setCelebrationVisible(true);
             } catch (attendeesError) {
               void playErrorSound();
               Alert.alert(
@@ -655,6 +630,102 @@ export const ScanTicketsScreen = ({ route, navigation }: Props): React.JSX.Eleme
             </View>
           </View>
         </CameraView>
+
+        {/* Celebrating popup modal */}
+        <Modal
+          visible={celebrationVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setCelebrationVisible(false);
+            setCelebrationPoints(null);
+            setTimeout(() => {
+              setIsScanning(true);
+              setIsVerifying(false);
+            }, 300);
+          }}
+        >
+          <TouchableOpacity
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.6)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: theme.spacing.lg,
+            }}
+            activeOpacity={1}
+            onPress={() => {
+              setCelebrationVisible(false);
+              setCelebrationPoints(null);
+              setTimeout(() => {
+                setIsScanning(true);
+                setIsVerifying(false);
+              }, 300);
+            }}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={{
+                backgroundColor: theme.colors.surface,
+                borderRadius: 24,
+                padding: theme.spacing.xl,
+                alignItems: 'center',
+                minWidth: 280,
+                borderWidth: 1,
+                borderColor: theme.colors.border,
+                ...theme.shadow('lg'),
+              }}
+            >
+              <AppText style={{ fontSize: 56, marginBottom: theme.spacing.sm }}>🎉</AppText>
+              <AppText variant="title" style={{ marginBottom: theme.spacing.xs, textAlign: 'center' }}>
+                Ticket Verified!
+              </AppText>
+              {celebrationPoints != null && celebrationPoints > 0 ? (
+                <View
+                  style={{
+                    marginTop: theme.spacing.md,
+                    marginBottom: theme.spacing.lg,
+                    paddingHorizontal: theme.spacing.lg,
+                    paddingVertical: theme.spacing.md,
+                    backgroundColor: theme.colors.primaryLight,
+                    borderRadius: 16,
+                    borderWidth: 2,
+                    borderColor: theme.colors.primary + '50',
+                  }}
+                >
+                  <AppText color="muted" variant="caption" style={{ marginBottom: 4 }}>
+                    They earned
+                  </AppText>
+                  <AppText
+                    style={{
+                      fontSize: 32,
+                      fontWeight: '700',
+                      color: theme.colors.primary,
+                    }}
+                  >
+                    {celebrationPoints} points
+                  </AppText>
+                </View>
+              ) : (
+                <AppText color="muted" style={{ marginTop: theme.spacing.sm, marginBottom: theme.spacing.lg, textAlign: 'center' }}>
+                  Attendee admitted
+                </AppText>
+              )}
+              <Button
+                label="Scan Another"
+                onPress={() => {
+                  setCelebrationVisible(false);
+                  setCelebrationPoints(null);
+                  setTimeout(() => {
+                    setIsScanning(true);
+                    setIsVerifying(false);
+                  }, 300);
+                }}
+              />
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
 
         <View style={styles.bottomBar}>
           <AppText variant="caption" style={styles.scannedCount} color="muted">

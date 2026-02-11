@@ -7,6 +7,7 @@ import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../types';
 import { getSeriesShortLabel } from '../utils/seriesUtils';
 import { shareEvent } from '../utils/shareEvent';
+import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../utils/pointsUtils';
 
 interface EventCardProps {
   event: Event;
@@ -206,6 +207,28 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         )}
 
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 4 }}>
+          <View style={[styles.seriesBadge, { backgroundColor: theme.colors.success + '20' }]}>
+            <AppText style={[styles.seriesBadgeText, { color: theme.colors.success }]} variant="caption">
+              🎯 {calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers))} pts
+            </AppText>
+          </View>
+          {(event.isPaid !== undefined ? event.isPaid : false) ? (
+            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.primary + '30' }]}>
+              <AppText style={styles.seriesBadgeText} variant="caption" numberOfLines={1}>
+                {event.pricingTiers && event.pricingTiers.length > 0
+                  ? event.pricingTiers.map((t) => `${t.name}: ${t.price}`).join(' · ')
+                  : event.price != null
+                    ? `${event.price} ${event.currency || 'AED'}`
+                    : 'Paid'}
+              </AppText>
+            </View>
+          ) : (
+            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.primary + '20' }]}>
+              <AppText style={styles.seriesBadgeText} variant="caption">
+                Free
+              </AppText>
+            </View>
+          )}
           {event.isFromFollowedHost && (
             <View style={styles.followedBadge}>
               <AppText style={styles.followedBadgeText} variant="caption">

@@ -9,6 +9,11 @@ export const eventsRouter = express.Router();
 
 const seriesIntervalSchema = z.enum(['1week', '2weeks', '3weeks', '1month']);
 
+const pricingTierSchema = z.object({
+  name: z.string().min(1).max(50),
+  price: z.number().positive(),
+});
+
 const createEventSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1),
@@ -17,6 +22,10 @@ const createEventSchema = z.object({
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional(),
   isTicketed: z.boolean().optional(),
+  isPaid: z.boolean().optional(),
+  price: z.number().positive().optional(),
+  pricingTiers: z.array(pricingTierSchema).min(1).max(4).optional(),
+  currency: z.string().min(1).max(10).optional(),
   topics: z
     .array(z.string())
     .max(3)
@@ -33,6 +42,10 @@ const updateEventSchema = z.object({
   date: z.string().datetime().optional(),
   maxAttendees: z.number().positive().optional(),
   imageUrl: z.string().url().optional().nullable(),
+  isPaid: z.boolean().optional(),
+  price: z.number().positive().optional().nullable(),
+  pricingTiers: z.array(pricingTierSchema).min(1).max(4).optional().nullable(),
+  currency: z.string().min(1).max(10).optional(),
   topics: z
     .array(z.string())
     .max(3)
@@ -99,6 +112,18 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       throw new AppError(400, 'Event date must be in the future');
     }
 
+    // For paid events: require either single price or 1–4 pricing tiers
+    if (body.isPaid) {
+      const hasPrice = body.price != null && body.price > 0;
+      const hasTiers = body.pricingTiers && body.pricingTiers.length > 0;
+      if (!hasPrice && !hasTiers) {
+        throw new AppError(400, 'Paid events require either a price or at least one pricing tier');
+      }
+      if (hasTiers && body.pricingTiers!.length > 4) {
+        throw new AppError(400, 'Maximum 4 pricing tiers allowed');
+      }
+    }
+
     // If seriesInterval is provided, seriesCount defaults to 12
     const seriesCount = body.seriesInterval ? (body.seriesCount || 12) : undefined;
 
@@ -110,6 +135,10 @@ eventsRouter.post('/', authenticate, async (req: AuthRequest, res, next) => {
       maxAttendees: body.maxAttendees,
       imageUrl: body.imageUrl,
       isTicketed: body.isTicketed,
+      isPaid: body.isPaid,
+      price: body.price,
+      pricingTiers: body.pricingTiers,
+      currency: body.currency,
       topics: body.topics,
       organizerId: req.userId,
       seriesInterval: body.seriesInterval,
@@ -176,6 +205,16 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     }
 
     const body = updateEventSchema.parse(req.body);
+
+    // When setting event as paid on update: require price or tiers
+    if (body.isPaid === true) {
+      const hasPrice = body.price != null && body.price > 0;
+      const hasTiers = body.pricingTiers && body.pricingTiers.length > 0;
+      if (!hasPrice && !hasTiers) {
+        throw new AppError(400, 'Paid events require either a price or at least one pricing tier');
+      }
+    }
+
     const updateData: any = {};
 
     if (body.title !== undefined) updateData.title = body.title;
@@ -184,6 +223,10 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     if (body.date !== undefined) updateData.date = new Date(body.date);
     if (body.maxAttendees !== undefined) updateData.maxAttendees = body.maxAttendees;
     if (body.imageUrl !== undefined) updateData.imageUrl = body.imageUrl;
+    if (body.isPaid !== undefined) updateData.isPaid = body.isPaid;
+    if (body.price !== undefined) updateData.price = body.price;
+    if (body.pricingTiers !== undefined) updateData.pricingTiers = body.pricingTiers;
+    if (body.currency !== undefined) updateData.currency = body.currency;
     if (body.topics !== undefined) updateData.topics = body.topics;
 
     const updateAllFutureEvents = body.updateAllFutureEvents === true;

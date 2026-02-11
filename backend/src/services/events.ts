@@ -3,7 +3,7 @@ import type { Event, EventAttendee, EventCoHost } from '../types';
 import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
 import { followsService } from './follows';
 import { challengesService } from './challenges';
-import { POINTS_PER_ATTENDANCE } from '../constants/gamification';
+import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../constants/gamification';
 
 export const eventsService = {
   /**
@@ -63,6 +63,15 @@ export const eventsService = {
       maxAttendees: prismaEvent.maxAttendees || undefined,
       isJoined,
       isTicketed: prismaEvent.isTicketed || undefined,
+      isPaid: prismaEvent.isPaid || undefined,
+      price: prismaEvent.price != null ? Number(prismaEvent.price) : undefined,
+      pricingTiers: Array.isArray(prismaEvent.pricingTiers)
+        ? (prismaEvent.pricingTiers as Array<{ name: string; price: number }>).map((t) => ({
+            name: String(t.name),
+            price: Number(t.price),
+          }))
+        : undefined,
+      currency: prismaEvent.currency || undefined,
       topics: prismaEvent.topics?.length ? [...prismaEvent.topics] : undefined,
       canEdit: userId ? canEdit : undefined,
       seriesId: prismaEvent.seriesId || undefined,
@@ -184,6 +193,10 @@ export const eventsService = {
     maxAttendees?: number;
     imageUrl?: string;
     isTicketed?: boolean;
+    isPaid?: boolean;
+    price?: number;
+    pricingTiers?: Array<{ name: string; price: number }>;
+    currency?: string;
     topics?: string[];
     organizerId: string;
     seriesInterval?: SeriesInterval;
@@ -207,6 +220,10 @@ export const eventsService = {
             maxAttendees?: number;
             imageUrl?: string | null;
             isTicketed?: boolean;
+            isPaid?: boolean;
+            price?: number;
+            pricingTiers?: unknown;
+            currency?: string;
             topics?: string[];
           } = {
             title: data.title,
@@ -228,6 +245,22 @@ export const eventsService = {
 
           if (data.isTicketed !== undefined) {
             eventData.isTicketed = data.isTicketed;
+          }
+
+          if (data.isPaid !== undefined) {
+            eventData.isPaid = data.isPaid;
+          }
+
+          if (data.price !== undefined) {
+            eventData.price = data.price;
+          }
+
+          if (data.currency !== undefined) {
+            eventData.currency = data.currency;
+          }
+
+          if (data.pricingTiers !== undefined && data.pricingTiers.length > 0) {
+            eventData.pricingTiers = data.pricingTiers as unknown;
           }
 
           if (data.topics !== undefined && data.topics.length > 0) {
@@ -317,6 +350,10 @@ export const eventsService = {
       maxAttendees?: number;
       imageUrl?: string | null;
       isTicketed?: boolean;
+      isPaid?: boolean;
+      price?: number;
+      pricingTiers?: unknown;
+      currency?: string;
       topics?: string[];
     } = {
       title: data.title,
@@ -336,6 +373,22 @@ export const eventsService = {
 
     if (data.isTicketed !== undefined) {
       eventData.isTicketed = data.isTicketed;
+    }
+
+    if (data.isPaid !== undefined) {
+      eventData.isPaid = data.isPaid;
+    }
+
+    if (data.price !== undefined) {
+      eventData.price = data.price;
+    }
+
+    if (data.currency !== undefined) {
+      eventData.currency = data.currency;
+    }
+
+    if (data.pricingTiers !== undefined && data.pricingTiers.length > 0) {
+      eventData.pricingTiers = data.pricingTiers as unknown;
     }
 
     if (data.topics !== undefined && data.topics.length > 0) {
@@ -462,6 +515,10 @@ export const eventsService = {
       date?: Date;
       maxAttendees?: number;
       imageUrl?: string;
+      isPaid?: boolean;
+      price?: number | null;
+      pricingTiers?: Array<{ name: string; price: number }> | null;
+      currency?: string;
       topics?: string[];
     },
     updateAllFutureEvents: boolean = false
@@ -494,6 +551,16 @@ export const eventsService = {
     }
     if (data.maxAttendees !== undefined) updateData.maxAttendees = data.maxAttendees;
     if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl || null;
+    if (data.isPaid !== undefined) {
+      updateData.isPaid = data.isPaid;
+      if (!data.isPaid) {
+        updateData.price = null;
+        updateData.pricingTiers = null;
+      }
+    }
+    if (data.price !== undefined) updateData.price = data.price;
+    if (data.pricingTiers !== undefined) updateData.pricingTiers = data.pricingTiers as unknown;
+    if (data.currency !== undefined) updateData.currency = data.currency;
     if (data.topics !== undefined) updateData.topics = data.topics;
 
     // If updateAllFutureEvents is true and event is part of a series, update all future events
@@ -698,7 +765,7 @@ export const eventsService = {
     ticketNumber: string,
     userId: string | undefined,
     scannerUserId: string
-  ): Promise<{ admitted: boolean; message?: string }> => {
+  ): Promise<{ admitted: boolean; message?: string; pointsAwarded?: number }> => {
     // Check if scanner has permission (organizer or co-host with edit permission)
     const canEdit = await eventsService.canUserEditEvent(eventId, scannerUserId);
     if (!canEdit) {
@@ -768,11 +835,17 @@ export const eventsService = {
         },
       });
 
+      const effectivePrice = getEffectivePriceForPoints(
+        event.price != null ? Number(event.price) : null,
+        Array.isArray(event.pricingTiers) ? (event.pricingTiers as Array<{ name: string; price: number }>) : null
+      );
+      const pointsToAward = calculatePointsForAttendance(effectivePrice);
+
       // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
       try {
         await prisma.user.update({
           where: { id: userId },
-          data: { points: { increment: POINTS_PER_ATTENDANCE } },
+          data: { points: { increment: pointsToAward } },
         });
       } catch (pointsErr) {
         console.warn('Failed to award points (migration may not be run):', pointsErr);
@@ -805,7 +878,7 @@ export const eventsService = {
       return {
         admitted: true,
         message: 'Ticket verified successfully. Attendee has been admitted.',
-        pointsAwarded: POINTS_PER_ATTENDANCE,
+        pointsAwarded: pointsToAward,
       };
     }
 
@@ -872,11 +945,17 @@ export const eventsService = {
       },
     });
 
+    const effectivePrice = getEffectivePriceForPoints(
+      event.price != null ? Number(event.price) : null,
+      Array.isArray(event.pricingTiers) ? (event.pricingTiers as Array<{ name: string; price: number }>) : null
+    );
+    const pointsToAward = calculatePointsForAttendance(effectivePrice);
+
     // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
     try {
       await prisma.user.update({
         where: { id: ticket.userId },
-        data: { points: { increment: POINTS_PER_ATTENDANCE } },
+        data: { points: { increment: pointsToAward } },
       });
     } catch (pointsErr) {
       console.warn('Failed to award points (migration may not be run):', pointsErr);
@@ -902,7 +981,7 @@ export const eventsService = {
     return {
       admitted: true,
       message: 'Ticket verified successfully. Attendee has been admitted.',
-      pointsAwarded: POINTS_PER_ATTENDANCE,
+      pointsAwarded: pointsToAward,
     };
   },
 };
