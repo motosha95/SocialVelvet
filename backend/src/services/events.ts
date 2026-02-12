@@ -77,6 +77,7 @@ export const eventsService = {
       seriesId: prismaEvent.seriesId || undefined,
       seriesInterval: (prismaEvent.seriesInterval as SeriesInterval) || undefined,
       seriesIndex: prismaEvent.seriesIndex !== null ? prismaEvent.seriesIndex : undefined,
+      isCancelled: prismaEvent.isCancelled === true,
       isFromFollowedHost: userId && followedOrganizerIds ? followedOrganizerIds.has(prismaEvent.organizerId) : undefined,
       createdAt: prismaEvent.createdAt.toISOString(),
       updatedAt: prismaEvent.updatedAt.toISOString(),
@@ -107,6 +108,7 @@ export const eventsService = {
     }
 
     const events = await prisma.event.findMany({
+      where: { isCancelled: false },
       include: {
         organizer: {
           select: {
@@ -658,6 +660,40 @@ export const eventsService = {
         canEdit,
       },
     });
+  },
+
+  /**
+   * Cancel event or series. Only organizer/co-hosts with edit permission can cancel.
+   */
+  cancelEvent: async (eventId: string, userId: string, cancelSeries: boolean = false): Promise<void> => {
+    const canEdit = await eventsService.canUserEditEvent(eventId, userId);
+    if (!canEdit) {
+      throw new Error('You do not have permission to cancel this event');
+    }
+
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+    });
+
+    if (!event) {
+      throw new Error('Event not found');
+    }
+
+    if (event.isCancelled) {
+      throw new Error('Event is already cancelled');
+    }
+
+    if (cancelSeries && event.seriesId) {
+      await prisma.event.updateMany({
+        where: { seriesId: event.seriesId },
+        data: { isCancelled: true },
+      });
+    } else {
+      await prisma.event.update({
+        where: { id: eventId },
+        data: { isCancelled: true },
+      });
+    }
   },
 
   /**

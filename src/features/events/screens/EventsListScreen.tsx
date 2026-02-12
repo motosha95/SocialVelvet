@@ -1,8 +1,6 @@
 import React from 'react';
 import {
   ActivityIndicator,
-  Animated,
-  Easing,
   FlatList,
   RefreshControl,
   ScrollView,
@@ -49,12 +47,8 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
   const [selectedTopics, setSelectedTopics] = React.useState<string[]>([]);
 
   const flatListRef = React.useRef<FlatList>(null);
-  const filterAnim = React.useRef(new Animated.Value(1)).current;
-  const [showFilters, setShowFilters] = React.useState(true);
-  const lastTargetRef = React.useRef<boolean | null>(null);
-  const HIDE_THRESHOLD = 100;
-  const SHOW_THRESHOLD = 40;
-  const FILTER_HEIGHT = 140;
+  const [showScrollToTop, setShowScrollToTop] = React.useState(false);
+  const SCROLL_TO_TOP_THRESHOLD = 150;
 
   const toggleTopicFilter = React.useCallback((topic: string) => {
     setSelectedTopics((prev) =>
@@ -241,47 +235,14 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
   const handleScroll = React.useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = e.nativeEvent.contentOffset.y;
-      const wantShow = y < SHOW_THRESHOLD;
-      const wantHide = y > HIDE_THRESHOLD;
-      const lastTarget = lastTargetRef.current;
-      if (wantHide && lastTarget !== false) {
-        lastTargetRef.current = false;
-        setShowFilters(false);
-        Animated.timing(filterAnim, {
-          toValue: 0,
-          duration: 380,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: false,
-        }).start();
-      } else if (wantShow && lastTarget !== true) {
-        lastTargetRef.current = true;
-        setShowFilters(true);
-        Animated.timing(filterAnim, {
-          toValue: 1,
-          duration: 380,
-          easing: Easing.inOut(Easing.cubic),
-          useNativeDriver: false,
-        }).start();
-      }
+      setShowScrollToTop((prev) => {
+        if (y > SCROLL_TO_TOP_THRESHOLD) return true;
+        if (y < 50) return false;
+        return prev;
+      });
     },
-    [filterAnim]
+    []
   );
-
-  const filterSectionHeight = filterAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, FILTER_HEIGHT],
-    extrapolate: 'clamp',
-  });
-  const filterSectionOpacity = filterAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, 1],
-    extrapolate: 'clamp',
-  });
-  const scrollToTopOpacity = filterAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 0],
-    extrapolate: 'clamp',
-  });
 
   if (isLoading && events.length === 0) {
     return (
@@ -318,73 +279,6 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
           />
           <Button label="Create" onPress={handleCreateEvent} style={styles.createButton} />
         </View>
-
-        <Animated.View
-          style={[
-            styles.filterSection,
-            {
-              height: filterSectionHeight,
-              opacity: filterSectionOpacity,
-              overflow: 'hidden',
-              marginBottom: 0,
-            },
-          ]}
-        >
-          <AppText style={styles.filterRowLabel}>Host</AppText>
-          <View style={styles.hostSegmentedContainer}>
-            {(['all', 'following', 'newHost'] as const).map((filter) => {
-              const selected = hostFilter === filter;
-              return (
-                <TouchableOpacity
-                  key={filter}
-                  style={[styles.hostSegment, selected && styles.hostSegmentSelected]}
-                  onPress={() => setHostFilter(filter)}
-                  activeOpacity={0.7}
-                >
-                  <AppText style={[styles.hostSegmentText, selected && styles.hostSegmentTextSelected]}>
-                    {HOST_FILTER_LABELS[filter]}
-                  </AppText>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          <View style={styles.topicSection}>
-            <AppText style={styles.filterRowLabel}>Topic</AppText>
-            <View style={styles.topicTabsContainer}>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.topicTabsScroll}
-              >
-                <View style={styles.topicTabRow}>
-                  {EVENT_TOPICS.map((topic) => {
-                    const selected = selectedTopics.includes(topic);
-                    return (
-                      <TouchableOpacity
-                        key={topic}
-                        style={[styles.topicChip, selected && styles.topicChipSelected]}
-                        onPress={() => toggleTopicFilter(topic)}
-                        activeOpacity={0.7}
-                      >
-                        <AppText style={[styles.topicChipText, selected && styles.topicChipTextSelected]}>
-                          {topic}
-                        </AppText>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-          {(selectedTopics.length > 0 || hostFilter !== 'all') && (
-            <AppText color="muted" style={{ fontSize: 10, marginTop: 4 }}>
-              {hostFilter !== 'all' && `${HOST_FILTER_LABELS[hostFilter]} • `}
-              {selectedTopics.length > 0 && `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected • `}
-              tap to toggle
-            </AppText>
-          )}
-        </Animated.View>
       </View>
 
       {error && (
@@ -401,6 +295,63 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         renderItem={({ item }) => <EventCard event={item} onPress={() => handleEventPress(item.id)} />}
         onScroll={handleScroll}
         scrollEventThrottle={16}
+        ListHeaderComponent={
+          <View style={styles.filterSection}>
+            <AppText style={styles.filterRowLabel}>Host</AppText>
+            <View style={styles.hostSegmentedContainer}>
+              {(['all', 'following', 'newHost'] as const).map((filter) => {
+                const selected = hostFilter === filter;
+                return (
+                  <TouchableOpacity
+                    key={filter}
+                    style={[styles.hostSegment, selected && styles.hostSegmentSelected]}
+                    onPress={() => setHostFilter(filter)}
+                    activeOpacity={0.7}
+                  >
+                    <AppText style={[styles.hostSegmentText, selected && styles.hostSegmentTextSelected]}>
+                      {HOST_FILTER_LABELS[filter]}
+                    </AppText>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.topicSection}>
+              <AppText style={styles.filterRowLabel}>Topic</AppText>
+              <View style={styles.topicTabsContainer}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.topicTabsScroll}
+                >
+                  <View style={styles.topicTabRow}>
+                    {EVENT_TOPICS.map((topic) => {
+                      const selected = selectedTopics.includes(topic);
+                      return (
+                        <TouchableOpacity
+                          key={topic}
+                          style={[styles.topicChip, selected && styles.topicChipSelected]}
+                          onPress={() => toggleTopicFilter(topic)}
+                          activeOpacity={0.7}
+                        >
+                          <AppText style={[styles.topicChipText, selected && styles.topicChipTextSelected]}>
+                            {topic}
+                          </AppText>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
+              </View>
+            </View>
+            {(selectedTopics.length > 0 || hostFilter !== 'all') && (
+              <AppText color="muted" style={{ fontSize: 10, marginTop: 4 }}>
+                {hostFilter !== 'all' && `${HOST_FILTER_LABELS[hostFilter]} • `}
+                {selectedTopics.length > 0 && `${selectedTopics.length} topic${selectedTopics.length === 1 ? '' : 's'} selected • `}
+                tap to toggle
+              </AppText>
+            )}
+          </View>
+        }
         contentContainerStyle={
           filteredEvents.length === 0
             ? styles.emptyContainer
@@ -424,31 +375,32 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         showsVerticalScrollIndicator={false}
       />
 
-      <Animated.View
-        pointerEvents="box-none"
-        style={{
-          position: 'absolute',
-          right: theme.spacing.md,
-          bottom: insets.bottom + 80,
-          opacity: scrollToTopOpacity,
-        }}
-      >
-        <TouchableOpacity
-          onPress={handleScrollToTop}
+      {showScrollToTop && (
+        <View
+          pointerEvents="box-none"
           style={{
-            width: 44,
-            height: 44,
-            borderRadius: 22,
-            backgroundColor: theme.colors.primary,
-            justifyContent: 'center',
-            alignItems: 'center',
-            ...theme.shadow('md'),
+            position: 'absolute',
+            right: theme.spacing.md,
+            bottom: insets.bottom + 80,
           }}
-          activeOpacity={0.8}
         >
-          <AppText style={{ fontSize: 20, color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF' }}>↑</AppText>
-        </TouchableOpacity>
-      </Animated.View>
+          <TouchableOpacity
+            onPress={handleScrollToTop}
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 22,
+              backgroundColor: theme.colors.primary,
+              justifyContent: 'center',
+              alignItems: 'center',
+              ...theme.shadow('md'),
+            }}
+            activeOpacity={0.8}
+          >
+            <AppText style={{ fontSize: 20, color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF' }}>↑</AppText>
+          </TouchableOpacity>
+        </View>
+      )}
     </Screen>
   );
 };

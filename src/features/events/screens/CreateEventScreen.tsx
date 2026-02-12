@@ -1,5 +1,5 @@
 import React from 'react';
-import { ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch, Modal, FlatList, Pressable } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch, Modal, FlatList, Pressable } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { CompositeScreenProps } from '@react-navigation/native';
@@ -22,9 +22,10 @@ import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Create>, BottomTabScreenProps<AppTabsParamList>>;
 
-export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
+export const CreateEventScreen = ({ navigation, route }: Props): React.JSX.Element => {
   const theme = useTheme();
   const addEvent = useEventsStore((s) => s.addEvent);
+  const copyFromEventId = route.params?.copyFromEventId;
 
   const [title, setTitle] = React.useState<string>('');
   const [description, setDescription] = React.useState<string>('');
@@ -38,6 +39,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [maxAttendees, setMaxAttendees] = React.useState<string>('');
   const [imageUri, setImageUri] = React.useState<string | null>(null);
   const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
+  const [seriesCount, setSeriesCount] = React.useState<number>(12);
   const [topics, setTopics] = React.useState<string[]>([]);
   const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
   const [isPaid, setIsPaid] = React.useState<boolean>(false);
@@ -49,6 +51,48 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
   const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
   const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [isLoadingCopy, setIsLoadingCopy] = React.useState<boolean>(!!copyFromEventId);
+
+  React.useEffect(() => {
+    if (!copyFromEventId) return;
+    let cancelled = false;
+    eventsApi.getById(copyFromEventId).then((ev) => {
+      if (cancelled || !ev) {
+        setIsLoadingCopy(false);
+        return;
+      }
+      setTitle(ev.title);
+      setDescription(ev.description);
+      setLocation(ev.location);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(18, 0, 0, 0);
+      setDateTime(tomorrow);
+      setMaxAttendees(ev.maxAttendees != null ? String(ev.maxAttendees) : '');
+      setImageUri(ev.imageUrl || null);
+      setSeriesInterval(ev.seriesInterval || null);
+      setTopics(ev.topics || []);
+      setIsPaid(ev.isPaid ?? false);
+      if (ev.isPaid && ev.pricingTiers && ev.pricingTiers.length > 0) {
+        setUsePricingTiers(true);
+        setPricingTiers(
+          ev.pricingTiers.map((t) => ({ name: t.name, price: String(t.price) }))
+        );
+        setPrice('');
+      } else {
+        setUsePricingTiers(false);
+        setPrice(ev.price != null ? String(ev.price) : '');
+        setPricingTiers([{ name: '', price: '' }]);
+      }
+      setIsLoadingCopy(false);
+    }).catch(() => {
+      if (!cancelled) {
+        setError('Failed to load event to copy');
+        setIsLoadingCopy(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [copyFromEventId]);
 
   const toggleTopic = (topic: string): void => {
     setTopics((prev) => {
@@ -368,7 +412,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
       // If series is selected, add series info
       if (seriesInterval) {
         baseRequest.seriesInterval = seriesInterval;
-        baseRequest.seriesCount = MAX_SERIES_EVENTS;
+        baseRequest.seriesCount = Math.min(Math.max(1, seriesCount), MAX_SERIES_EVENTS);
       }
 
       const result = await eventsApi.create(baseRequest);
@@ -397,12 +441,25 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
 
 
 
+  if (isLoadingCopy) {
+    return (
+      <Screen>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: theme.spacing.xl }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <AppText color="muted" style={{ marginTop: theme.spacing.md }}>Loading event to copy...</AppText>
+        </View>
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <AppText variant="title">Create Event</AppText>
-          <AppText color="muted">Share an event with the community.</AppText>
+          <AppText variant="title">{copyFromEventId ? 'Copy Event' : 'Create Event'}</AppText>
+          <AppText color="muted">
+            {copyFromEventId ? 'Create a new event based on this one.' : 'Share an event with the community.'}
+          </AppText>
         </View>
 
         <View style={styles.card}>
@@ -453,7 +510,7 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
             Repeat Event (optional)
           </AppText>
           <AppText color="muted" style={styles.hint}>
-            Note: Repeating events will be created a maximum of {MAX_SERIES_EVENTS} times
+            Choose how often to repeat (max {MAX_SERIES_EVENTS} events)
           </AppText>
           <View style={styles.seriesOptions}>
             {(['1week', '2weeks', '3weeks', '1month'] as SeriesInterval[]).map((interval) => (
@@ -481,9 +538,36 @@ export const CreateEventScreen = ({ navigation }: Props): React.JSX.Element => {
             ))}
           </View>
           {seriesInterval && (
-            <AppText color="muted" style={styles.hint}>
-              This will create {MAX_SERIES_EVENTS} recurring events
-            </AppText>
+            <>
+              <AppText style={[styles.fieldLabel, { marginTop: theme.spacing.md }]} color="muted">
+                How many times?
+              </AppText>
+              <View style={styles.seriesOptions}>
+                {[2, 4, 6, 8, 10, 12].map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[
+                      styles.seriesOption,
+                      seriesCount === n && styles.seriesOptionSelected,
+                    ]}
+                    onPress={() => setSeriesCount(n)}
+                    disabled={isSubmitting}
+                  >
+                    <AppText
+                      style={[
+                        styles.seriesOptionText,
+                        seriesCount === n && styles.seriesOptionTextSelected,
+                      ]}
+                    >
+                      {n} events
+                    </AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <AppText color="muted" style={styles.hint}>
+                This will create {seriesCount} recurring events
+              </AppText>
+            </>
           )}
 
           <AppText style={styles.fieldLabel} color="muted">

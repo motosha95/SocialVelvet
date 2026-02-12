@@ -24,6 +24,7 @@ export interface Event {
   seriesId?: string; // ID linking events in a series
   seriesInterval?: SeriesInterval; // Interval for series recurrence
   seriesIndex?: number; // Index of this event in the series (0-based)
+  isCancelled?: boolean; // Whether the event has been cancelled
   createdAt: string;
   updatedAt: string;
 }

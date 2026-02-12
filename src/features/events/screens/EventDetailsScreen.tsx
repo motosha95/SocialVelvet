@@ -50,6 +50,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [isLeaving, setIsLeaving] = React.useState<boolean>(false);
   const [error, setError] = React.useState<string | null>(null);
   const [menuVisible, setMenuVisible] = React.useState<boolean>(false);
+  const [eventOptionsVisible, setEventOptionsVisible] = React.useState<boolean>(false);
   const [selectedCoHost, setSelectedCoHost] = React.useState<{ userId: string; canEdit: boolean } | null>(null);
   const [ticketModalVisible, setTicketModalVisible] = React.useState<boolean>(false);
   const [showTicketAfterJoin, setShowTicketAfterJoin] = React.useState<boolean>(false);
@@ -59,8 +60,11 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const hasShownAdmissionCelebrationRef = React.useRef<boolean>(false);
   const [isFollowingHost, setIsFollowingHost] = React.useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState<boolean>(false);
+  const [isCancelling, setIsCancelling] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
+  const removeEvent = useEventsStore((s) => s.removeEvent);
+  const removeEventsBySeriesId = useEventsStore((s) => s.removeEventsBySeriesId);
 
   // Load admitted user IDs from store when screen comes into focus
   useFocusEffect(
@@ -632,6 +636,48 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
   };
 
+  const handleCancelEvent = React.useCallback(() => {
+    if (!event || !userId) return;
+
+    const isSeries = Boolean(event.seriesId);
+    const doCancel = async (cancelSeries: boolean) => {
+      setIsCancelling(true);
+      try {
+        await eventsApi.cancel(eventId, cancelSeries);
+        if (cancelSeries && event.seriesId) {
+          removeEventsBySeriesId(event.seriesId);
+        } else {
+          removeEvent(eventId);
+        }
+        navigation.goBack();
+      } catch (err) {
+        Alert.alert('Error', err instanceof Error ? err.message : 'Failed to cancel event');
+      } finally {
+        setIsCancelling(false);
+      }
+    };
+
+    const options: Array<{ text: string; style?: 'default' | 'cancel' | 'destructive'; onPress?: () => void }> = [
+      { text: 'Cancel this event only', onPress: () => void doCancel(false) },
+    ];
+    if (isSeries) {
+      options.push({
+        text: 'Cancel entire series',
+        style: 'destructive',
+        onPress: () => void doCancel(true),
+      });
+    }
+    options.push({ text: 'Keep event', style: 'cancel' });
+
+    Alert.alert(
+      'Cancel event?',
+      isSeries
+        ? 'Do you want to cancel just this event or the entire series?'
+        : 'Are you sure you want to cancel this event? Attendees will no longer see it.',
+      options
+    );
+  }, [event, eventId, userId, navigation, removeEvent, removeEventsBySeriesId]);
+
   const handleFollowToggle = async (): Promise<void> => {
     if (!event || !userId || event.organizerId === userId || isFollowLoading) return;
     setIsFollowLoading(true);
@@ -935,11 +981,24 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                   onPress={() => navigation.navigate(Routes.Events.ScanTickets, { eventId })}
                 />
               )}
-              <Button
-                label="Edit Event"
-                onPress={() => navigation.navigate(Routes.Events.Edit, { eventId })}
-                variant="secondary"
-              />
+              <TouchableOpacity
+                onPress={() => setEventOptionsVisible(true)}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: theme.spacing.xs,
+                  paddingVertical: theme.spacing.sm,
+                  paddingHorizontal: theme.spacing.md,
+                  borderRadius: 10,
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: theme.colors.border,
+                }}
+              >
+                <AppText style={{ fontSize: 18 }}>⋯</AppText>
+                <AppText style={{ fontSize: 14, fontWeight: '500', color: theme.colors.text }}>Options</AppText>
+              </TouchableOpacity>
             </>
           )}
           {/* Don't show join/leave button if user is the organizer */}
@@ -1227,6 +1286,59 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                 </>
               )}
             </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Event Options Modal */}
+        <Modal
+          visible={eventOptionsVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setEventOptionsVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.menuModal}
+            activeOpacity={1}
+            onPress={() => setEventOptionsVisible(false)}
+          >
+            <TouchableOpacity
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+              style={styles.menuContainer}
+            >
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => {
+                  setEventOptionsVisible(false);
+                  navigation.navigate(Routes.Events.Edit, { eventId });
+                }}
+              >
+                <AppText style={styles.menuItemText}>Edit event</AppText>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuItem, event.isCancelled && styles.menuItemLast]}
+                onPress={() => {
+                  setEventOptionsVisible(false);
+                  navigation.navigate(Routes.Events.Create, { copyFromEventId: eventId });
+                }}
+              >
+                <AppText style={styles.menuItemText}>Copy event</AppText>
+              </TouchableOpacity>
+              {!event.isCancelled && (
+                <TouchableOpacity
+                  style={[styles.menuItem, styles.menuItemLast]}
+                  onPress={() => {
+                    setEventOptionsVisible(false);
+                    handleCancelEvent();
+                  }}
+                  disabled={isCancelling}
+                >
+                  <AppText style={[styles.menuItemText, styles.menuItemTextDanger]}>
+                    {isCancelling ? 'Cancelling...' : 'Cancel event'}
+                  </AppText>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
           </TouchableOpacity>
         </Modal>
 

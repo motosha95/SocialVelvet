@@ -78,6 +78,14 @@ export const eventsApi = {
     return await apiClient.get<EventAttendee[]>(`/events/${eventId}/attendees`);
   },
 
+  cancel: async (eventId: string, cancelSeries: boolean = false): Promise<void> => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    await apiClient.post(`/events/${eventId}/cancel`, { cancelSeries }, token);
+  },
+
   update: async (eventId: string, req: UpdateEventRequest): Promise<CreateEventResponse> => {
     const token = getAuthToken();
     if (!token) {

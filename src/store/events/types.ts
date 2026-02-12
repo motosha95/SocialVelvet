@@ -13,5 +13,7 @@ export interface EventsActions {
   leaveEvent: (eventId: string) => Promise<void>;
   addEvent: (event: Event) => void;
   updateEvent: (event: Event) => void;
+  removeEvent: (eventId: string) => void;
+  removeEventsBySeriesId: (seriesId: string) => void;
 }
 

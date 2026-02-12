@@ -9,7 +9,7 @@ export type AuthStackParamList = {
 export type EventsStackParamList = {
   [Routes.Events.List]: undefined;
   [Routes.Events.Details]: { eventId: string };
-  [Routes.Events.Create]: undefined;
+  [Routes.Events.Create]: { copyFromEventId?: string } | undefined;
   [Routes.Events.Edit]: { eventId: string };
   [Routes.Events.ScanTickets]: { eventId: string };
 };

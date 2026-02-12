@@ -94,5 +94,13 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     const events = get().events.map((event) => (event.id === updatedEvent.id ? updatedEvent : event));
     set({ events });
   },
+
+  removeEvent: (eventId: string) => {
+    set({ events: get().events.filter((e) => e.id !== eventId) });
+  },
+
+  removeEventsBySeriesId: (seriesId: string) => {
+    set({ events: get().events.filter((e) => e.seriesId !== seriesId) });
+  },
 }));
 

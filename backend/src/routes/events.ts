@@ -68,6 +68,10 @@ const verifyTicketSchema = z.object({
   userId: z.string().uuid().optional(),
 });
 
+const cancelEventSchema = z.object({
+  cancelSeries: z.boolean().optional().default(false),
+});
+
 // Get all events (public, but includes isJoined if authenticated). ?prioritizeFollowed=true puts events from followed hosts first.
 eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
@@ -313,6 +317,31 @@ eventsRouter.patch('/:id/co-hosts/:userId', authenticate, async (req: AuthReques
     if (err instanceof Error && err.message.includes('organizer')) {
       next(new AppError(403, err.message));
       return;
+    }
+    next(err);
+  }
+});
+
+// Cancel event or series (requires auth and edit permission)
+eventsRouter.post('/:id/cancel', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const body = cancelEventSchema.parse(req.body);
+    await eventsService.cancelEvent(req.params.id, req.userId, body.cancelSeries);
+    res.status(204).send();
+  } catch (err) {
+    if (err instanceof Error) {
+      if (err.message.includes('permission')) {
+        next(new AppError(403, err.message));
+        return;
+      }
+      if (err.message.includes('not found') || err.message.includes('already cancelled')) {
+        next(new AppError(400, err.message));
+        return;
+      }
     }
     next(err);
   }
