@@ -25,7 +25,8 @@ import type { EventsStackParamList, AppTabsParamList } from '../../../navigation
 import { Routes } from '../../../navigation/routes';
 import type { EventAttendee, EventCoHost } from '../types';
 import { getSeriesLabel } from '../utils/seriesUtils';
-import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../utils/pointsUtils';
+import { calculatePointsForAttendance, getEffectivePriceForPoints, getDisplayPointsForUser } from '../utils/pointsUtils';
+import { useUserStore } from '../../../store/user/userStore';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -39,6 +40,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const selectConversation = useChatStore((s) => s.selectConversation);
   const fetchConversations = useChatStore((s) => s.fetchConversations);
   const userId = useAuthStore((s) => s.session?.userId);
+  const profile = useUserStore((s) => s.profile);
 
   const [event, setEvent] = React.useState(events.find((e) => e.id === eventId));
   const [attendees, setAttendees] = React.useState<EventAttendee[]>([]);
@@ -86,8 +88,9 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
         const me = list.find((a) => a.userId === userId);
         if (me?.admittedAt) {
           hasShownAdmissionCelebrationRef.current = true;
-          const points = calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers));
-          setAdmissionCelebrationPoints(points);
+          const basePoints = calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers));
+          const vipTier = useUserStore.getState().profile?.vipTier;
+          setAdmissionCelebrationPoints(getDisplayPointsForUser(basePoints, vipTier));
           setAdmissionCelebrationVisible(true);
         }
       } catch {
@@ -861,6 +864,27 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
               </View>
             )}
 
+            {/* VIP badges */}
+            {(event.vipOnly || event.listFrom || event.isCuratedPick) && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs, marginTop: theme.spacing.sm }}>
+                {event.vipOnly && (
+                  <View style={[styles.topicTag, { backgroundColor: theme.colors.success + '25' }]}>
+                    <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>👑 VIP Plus only</AppText>
+                  </View>
+                )}
+                {event.listFrom && new Date(event.listFrom) > new Date() && (
+                  <View style={[styles.topicTag, { backgroundColor: theme.colors.primaryLight }]}>
+                    <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.primary }}>✨ Early access</AppText>
+                  </View>
+                )}
+                {event.isCuratedPick && (
+                  <View style={[styles.topicTag, { backgroundColor: theme.colors.primary + '20' }]}>
+                    <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.primary }}>📌 Staff pick</AppText>
+                  </View>
+                )}
+              </View>
+            )}
+
             {/* Attendees & Price — side-by-side or stacked when multiple tiers */}
             <View style={[styles.detailsGrid, { marginTop: theme.spacing.md }]}>
               <View style={styles.detailChip}>
@@ -908,6 +932,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                           >
                             <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.text }}>
                               {tier.name}: {tier.price} {event.currency || 'AED'}
+                              {event.vipDiscountPercent ? ` (${event.vipDiscountPercent}% VIP off)` : ''}
                             </AppText>
                           </View>
                         ))}
@@ -915,6 +940,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                     ) : (
                       <AppText style={[styles.detailValue, { color: theme.colors.text }]}>
                         {event.price != null ? `${event.price} ${event.currency || 'AED'}` : 'Paid'}
+                        {event.vipDiscountPercent ? ` (${event.vipDiscountPercent}% VIP off)` : ''}
                       </AppText>
                     )
                   ) : (
@@ -961,12 +987,18 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             </View>
             <View style={{ flex: 1 }}>
               <AppText style={{ fontWeight: '600', color: theme.colors.primary, marginBottom: 2 }}>
-                Earn {calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers))} points
+                Earn {getDisplayPointsForUser(
+                  calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers)),
+                  profile?.vipTier
+                )} points
+                {(profile?.vipTier === 'vip' || profile?.vipTier === 'vip_plus') ? ' (VIP double)' : ''}
               </AppText>
               <AppText color="muted" variant="caption">
                 {event.isJoined
                   ? 'Get your ticket scanned at the event to collect your points!'
-                  : 'Join & attend to earn points when your ticket is scanned'}
+                  : (profile?.vipTier === 'vip' || profile?.vipTier === 'vip_plus')
+                    ? 'Join & attend to earn double points when your ticket is scanned'
+                    : 'Join & attend to earn points when your ticket is scanned'}
               </AppText>
             </View>
           </View>

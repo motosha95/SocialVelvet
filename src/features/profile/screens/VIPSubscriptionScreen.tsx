@@ -1,8 +1,10 @@
 import React from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View, Alert } from 'react-native';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
+import { Button } from '../../../components/ui/Button';
 import { useTheme } from '../../../theme/useTheme';
+import { useUserStore } from '../../../store/user/userStore';
 
 type TierFeature = { icon: string; text: string };
 
@@ -134,8 +136,31 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
         borderRadius: 8,
         marginBottom: theme.spacing.sm,
       },
+      subscribeButton: {
+        marginTop: theme.spacing.md,
+      },
     });
   }, [theme]);
+
+  const profile = useUserStore((s) => s.profile);
+  const error = useUserStore((s) => s.error);
+  const updateSubscription = useUserStore((s) => s.updateSubscription);
+  const [subscribing, setSubscribing] = React.useState<string | null>(null);
+
+  const handleSubscribe = async (tierId: 'vip' | 'vip_plus') => {
+    const tier = tierId === 'vip_plus' ? 'vip_plus' : 'vip';
+    const tierName = tierId === 'vip_plus' ? 'VIP Plus' : 'VIP';
+    setSubscribing(tierId);
+    try {
+      await updateSubscription(tier);
+      Alert.alert('Subscribed', `You're now on ${tierName}. Enjoy your benefits!`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Subscription failed', message);
+    } finally {
+      setSubscribing(null);
+    }
+  };
 
   return (
     <Screen>
@@ -148,6 +173,11 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
           </AppText>
         </View>
 
+        {error && (
+          <View style={{ marginBottom: theme.spacing.md, padding: theme.spacing.sm, borderRadius: 12, backgroundColor: theme.colors.danger + '20', borderWidth: 1, borderColor: theme.colors.danger + '50' }}>
+            <AppText style={{ color: theme.colors.danger, fontSize: 14 }}>{error}</AppText>
+          </View>
+        )}
         <AppText style={styles.sectionLabel}>Plans</AppText>
         {VIP_TIERS.map((tier) => (
           <View key={tier.id} style={styles.tierCard}>
@@ -169,6 +199,22 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
                 <AppText style={styles.featureText}>{feature.text}</AppText>
               </View>
             ))}
+            {(() => {
+              const tierValue = tier.id === 'vip-plus' ? 'vip_plus' : 'vip';
+              const isCurrent = profile?.vipTier === tierValue;
+              const isSubscribing = subscribing === tier.id;
+              return (
+                <Button
+                  label={
+                    isCurrent ? 'Current plan' : isSubscribing ? 'Subscribing…' : 'Subscribe'
+                  }
+                  onPress={() => (isCurrent ? undefined : handleSubscribe(tierValue as 'vip' | 'vip_plus'))}
+                  variant={isCurrent ? 'secondary' : 'success'}
+                  style={styles.subscribeButton}
+                  disabled={isCurrent || subscribing !== null}
+                />
+              );
+            })()}
           </View>
         ))}
       </ScrollView>

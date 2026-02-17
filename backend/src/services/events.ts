@@ -3,7 +3,7 @@ import type { Event, EventAttendee, EventCoHost } from '../types';
 import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
 import { followsService } from './follows';
 import { challengesService } from './challenges';
-import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../constants/gamification';
+import { calculatePointsForAttendance, getEffectivePriceForPoints, applyVipPointsMultiplier } from '../constants/gamification';
 
 export const eventsService = {
   /**
@@ -34,9 +34,10 @@ export const eventsService = {
   },
 
   /**
-   * Transform Prisma event to API Event format
+   * Transform Prisma event to API Event format.
+   * When vipTier is provided, applies discount to price/pricingTiers (10% vip, 20% vip_plus).
    */
-  transformEvent: (prismaEvent: any, userId?: string, includeCoHosts: boolean = false, followedOrganizerIds?: Set<string>): Event => {
+  transformEvent: (prismaEvent: any, userId?: string, includeCoHosts: boolean = false, followedOrganizerIds?: Set<string>, vipTier?: string | null): Event => {
     const attendeeCount = prismaEvent.attendees?.length || 0;
     const isJoined = userId ? prismaEvent.attendees?.some((a: any) => a.userId === userId) || false : false;
     
@@ -47,6 +48,29 @@ export const eventsService = {
       if (!canEdit && prismaEvent.coHosts) {
         const coHost = prismaEvent.coHosts.find((ch: any) => ch.userId === userId);
         canEdit = coHost?.canEdit === true;
+      }
+    }
+
+    let price: number | undefined = prismaEvent.price != null ? Number(prismaEvent.price) : undefined;
+    let pricingTiers: { name: string; price: number }[] | undefined = Array.isArray(prismaEvent.pricingTiers)
+      ? (prismaEvent.pricingTiers as Array<{ name: string; price: number }>).map((t: any) => ({
+          name: String(t.name),
+          price: Number(t.price),
+        }))
+      : undefined;
+
+    let vipDiscountPercent: number | undefined;
+    if (vipTier === 'vip' || vipTier === 'vip_plus') {
+      const discount = vipTier === 'vip_plus' ? 0.2 : 0.1;
+      vipDiscountPercent = vipTier === 'vip_plus' ? 20 : 10;
+      if (price != null && price > 0) {
+        price = Math.round(price * (1 - discount) * 100) / 100;
+      }
+      if (pricingTiers && pricingTiers.length > 0) {
+        pricingTiers = pricingTiers.map((t) => ({
+          name: t.name,
+          price: Math.round(t.price * (1 - discount) * 100) / 100,
+        }));
       }
     }
 
@@ -64,13 +88,8 @@ export const eventsService = {
       isJoined,
       isTicketed: prismaEvent.isTicketed || undefined,
       isPaid: prismaEvent.isPaid || undefined,
-      price: prismaEvent.price != null ? Number(prismaEvent.price) : undefined,
-      pricingTiers: Array.isArray(prismaEvent.pricingTiers)
-        ? (prismaEvent.pricingTiers as Array<{ name: string; price: number }>).map((t) => ({
-            name: String(t.name),
-            price: Number(t.price),
-          }))
-        : undefined,
+      price,
+      pricingTiers,
       currency: prismaEvent.currency || undefined,
       topics: prismaEvent.topics?.length ? [...prismaEvent.topics] : undefined,
       canEdit: userId ? canEdit : undefined,
@@ -79,6 +98,10 @@ export const eventsService = {
       seriesIndex: prismaEvent.seriesIndex !== null ? prismaEvent.seriesIndex : undefined,
       isCancelled: prismaEvent.isCancelled === true,
       isFromFollowedHost: userId && followedOrganizerIds ? followedOrganizerIds.has(prismaEvent.organizerId) : undefined,
+      listFrom: prismaEvent.listFrom ? new Date(prismaEvent.listFrom).toISOString() : undefined,
+      vipOnly: prismaEvent.vipOnly === true,
+      isCuratedPick: prismaEvent.isCuratedPick === true,
+      vipDiscountPercent,
       createdAt: prismaEvent.createdAt.toISOString(),
       updatedAt: prismaEvent.updatedAt.toISOString(),
     };
@@ -99,12 +122,21 @@ export const eventsService = {
 
   /**
    * Get all events. When prioritizeFollowed is true and userId is set, events from followed hosts come first.
+   * VIP: early access (events with listFrom before now are visible), VIP Plus: also vipOnly events. Discounts applied when user has tier.
    */
   listEvents: async (userId?: string, prioritizeFollowed: boolean = false): Promise<Event[]> => {
     let followedIds = new Set<string>();
-    if (userId && prioritizeFollowed) {
-      const ids = await followsService.getFollowingIds(userId);
-      followedIds = new Set(ids);
+    let vipTier: string | null = null;
+    if (userId) {
+      if (prioritizeFollowed) {
+        const ids = await followsService.getFollowingIds(userId);
+        followedIds = new Set(ids);
+      }
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipTier: true },
+      });
+      vipTier = user?.vipTier ?? null;
     }
 
     const events = await prisma.event.findMany({
@@ -116,19 +148,21 @@ export const eventsService = {
             name: true,
           },
         },
-        // Always fetch all attendees to get correct count, then check if user is joined
         attendees: {
-          select: {
-            userId: true,
-          },
+          select: { userId: true },
         },
       },
-      orderBy: {
-        date: 'asc',
-      },
+      orderBy: { date: 'asc' },
     });
 
-    let result = events.map((event) => eventsService.transformEvent(event, userId, false, followedIds));
+    const now = new Date();
+    const filtered = events.filter((event: any) => {
+      if (event.vipOnly === true && vipTier !== 'vip_plus') return false;
+      if (event.listFrom && new Date(event.listFrom) > now && vipTier !== 'vip' && vipTier !== 'vip_plus') return false;
+      return true;
+    });
+
+    let result = filtered.map((event: any) => eventsService.transformEvent(event, userId, false, followedIds, vipTier));
 
     if (userId && prioritizeFollowed && followedIds.size > 0) {
       result = [...result].sort((a, b) => {
@@ -143,7 +177,7 @@ export const eventsService = {
   },
 
   /**
-   * Get event by ID
+   * Get event by ID. Returns null if event is vipOnly and user is not VIP Plus, or listFrom is in future and user is not VIP.
    */
   getEventById: async (id: string, userId?: string, includeCoHosts: boolean = false): Promise<Event | null> => {
     const event = await prisma.event.findUnique({
@@ -155,11 +189,8 @@ export const eventsService = {
             name: true,
           },
         },
-        // Always fetch all attendees to get correct count, then check if user is joined
         attendees: {
-          select: {
-            userId: true,
-          },
+          select: { userId: true },
         },
         coHosts: includeCoHosts && userId
           ? {
@@ -181,7 +212,23 @@ export const eventsService = {
       return null;
     }
 
-    return eventsService.transformEvent(event, userId, includeCoHosts);
+    let vipTier: string | null = null;
+    if (userId) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipTier: true },
+      });
+      vipTier = user?.vipTier ?? null;
+    }
+
+    if ((event as any).vipOnly === true && vipTier !== 'vip_plus') {
+      return null;
+    }
+    if ((event as any).listFrom && new Date((event as any).listFrom) > new Date() && vipTier !== 'vip' && vipTier !== 'vip_plus') {
+      return null;
+    }
+
+    return eventsService.transformEvent(event, userId, includeCoHosts, undefined, vipTier);
   },
 
   /**
@@ -443,6 +490,16 @@ export const eventsService = {
       throw new Error('Event not found');
     }
 
+    if ((event as any).vipOnly === true) {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipTier: true },
+      });
+      if (user?.vipTier !== 'vip_plus') {
+        throw new Error('This event is for VIP Plus members only');
+      }
+    }
+
     // Check if already joined
     const isAlreadyJoined = event.attendees.some((a) => a.userId === userId);
     if (isAlreadyJoined) {
@@ -522,6 +579,9 @@ export const eventsService = {
       pricingTiers?: Array<{ name: string; price: number }> | null;
       currency?: string;
       topics?: string[];
+      listFrom?: Date | null;
+      vipOnly?: boolean;
+      isCuratedPick?: boolean;
     },
     updateAllFutureEvents: boolean = false
   ): Promise<Event> => {
@@ -564,6 +624,9 @@ export const eventsService = {
     if (data.pricingTiers !== undefined) updateData.pricingTiers = data.pricingTiers as unknown;
     if (data.currency !== undefined) updateData.currency = data.currency;
     if (data.topics !== undefined) updateData.topics = data.topics;
+    if (data.listFrom !== undefined) updateData.listFrom = data.listFrom;
+    if (data.vipOnly !== undefined) updateData.vipOnly = data.vipOnly;
+    if (data.isCuratedPick !== undefined) updateData.isCuratedPick = data.isCuratedPick;
 
     // If updateAllFutureEvents is true and event is part of a series, update all future events
     if (updateAllFutureEvents && currentEvent.seriesId && currentEvent.seriesIndex !== null) {
@@ -875,7 +938,12 @@ export const eventsService = {
         event.price != null ? Number(event.price) : null,
         Array.isArray(event.pricingTiers) ? (event.pricingTiers as Array<{ name: string; price: number }>) : null
       );
-      const pointsToAward = calculatePointsForAttendance(effectivePrice);
+      const basePoints = calculatePointsForAttendance(effectivePrice);
+      const attendeeUser = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { vipTier: true },
+      });
+      const pointsToAward = applyVipPointsMultiplier(basePoints, attendeeUser?.vipTier as 'vip' | 'vip_plus' | null);
 
       // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
       try {
@@ -985,7 +1053,12 @@ export const eventsService = {
       event.price != null ? Number(event.price) : null,
       Array.isArray(event.pricingTiers) ? (event.pricingTiers as Array<{ name: string; price: number }>) : null
     );
-    const pointsToAward = calculatePointsForAttendance(effectivePrice);
+    const basePoints = calculatePointsForAttendance(effectivePrice);
+    const attendeeUser = await prisma.user.findUnique({
+      where: { id: ticket.userId },
+      select: { vipTier: true },
+    });
+    const pointsToAward = applyVipPointsMultiplier(basePoints, attendeeUser?.vipTier as 'vip' | 'vip_plus' | null);
 
     // Award points for attending (non-blocking - ticket scan succeeds even if points fail)
     try {

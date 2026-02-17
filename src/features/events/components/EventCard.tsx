@@ -7,7 +7,8 @@ import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../types';
 import { getSeriesShortLabel } from '../utils/seriesUtils';
 import { shareEvent } from '../utils/shareEvent';
-import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../utils/pointsUtils';
+import { calculatePointsForAttendance, getEffectivePriceForPoints, getDisplayPointsForUser } from '../utils/pointsUtils';
+import { useUserStore } from '../../../store/user/userStore';
 
 interface EventCardProps {
   event: Event;
@@ -16,6 +17,7 @@ interface EventCardProps {
 
 export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element => {
   const theme = useTheme();
+  const profile = useUserStore((s) => s.profile);
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -209,7 +211,10 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 4, gap: 4 }}>
           <View style={[styles.seriesBadge, { backgroundColor: theme.colors.success + '20' }]}>
             <AppText style={[styles.seriesBadgeText, { color: theme.colors.success }]} variant="caption">
-              🎯 {calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers))} pts
+              🎯 {getDisplayPointsForUser(
+                calculatePointsForAttendance(getEffectivePriceForPoints(event.price, event.pricingTiers)),
+                profile?.vipTier
+              )} pts
             </AppText>
           </View>
           {(event.isPaid !== undefined ? event.isPaid : false) ? (
@@ -220,6 +225,7 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
                   : event.price != null
                     ? `${event.price} ${event.currency || 'AED'}`
                     : 'Paid'}
+                {event.vipDiscountPercent ? ` (${event.vipDiscountPercent}% off)` : ''}
               </AppText>
             </View>
           ) : (
@@ -241,6 +247,21 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
               <AppText style={styles.seriesBadgeText} variant="caption">
                 {getSeriesShortLabel(event.seriesInterval)}
               </AppText>
+            </View>
+          )}
+          {event.vipOnly && (
+            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.success + '25' }]}>
+              <AppText style={[styles.seriesBadgeText, { color: theme.colors.success }]} variant="caption">👑 VIP</AppText>
+            </View>
+          )}
+          {event.listFrom && new Date(event.listFrom) > new Date() && (
+            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.primaryLight }]}>
+              <AppText style={[styles.seriesBadgeText, { color: theme.colors.primary }]} variant="caption">✨ Early</AppText>
+            </View>
+          )}
+          {event.isCuratedPick && (
+            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.primary + '20' }]}>
+              <AppText style={styles.seriesBadgeText} variant="caption">📌 Pick</AppText>
             </View>
           )}
           {event.isJoined && (

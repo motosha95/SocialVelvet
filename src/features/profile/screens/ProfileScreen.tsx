@@ -254,9 +254,27 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
               ★ {profile?.points ?? 0} points
             </AppText>
             <AppText color="muted" style={{ fontSize: 12, marginTop: 2 }}>
-              Earn points by attending events (ticket scanned)
+              {profile?.vipTier === 'vip' || profile?.vipTier === 'vip_plus'
+                ? 'Double points when you attend (VIP)'
+                : 'Earn points by attending events (ticket scanned)'}
             </AppText>
           </View>
+          {(profile?.vipTier === 'vip' || profile?.vipTier === 'vip_plus') && (
+            <View
+              style={[
+                styles.pointsBadge,
+                {
+                  marginTop: theme.spacing.sm,
+                  backgroundColor: theme.colors.success + '20',
+                  borderColor: theme.colors.success + '50',
+                },
+              ]}
+            >
+              <AppText style={{ color: theme.colors.success, fontWeight: '600', fontSize: 14 }}>
+                👑 {profile.vipTier === 'vip_plus' ? 'VIP Plus' : 'VIP'}
+              </AppText>
+            </View>
+          )}
         </View>
 
         <View style={styles.card}>

@@ -18,6 +18,7 @@ model User {
   avatarUrl String?
   bio       String?
   points    Int      @default(0) // Gamification: earned by attending events (ticket scanned)
+  vipTier   String?  // null | 'vip' | 'vip_plus' - doubles points, early access, discounts
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -99,12 +100,15 @@ model Event {
   pricingTiers Json?   // Optional: [{ name: string, price: number }], max 4 tiers
   currency     String   @default("AED") // Currency code
   topics       String[] @default([])   // Up to 3 topics from predefined list
-  seriesId     String?  // ID linking events in a series (UUID of first event)
-  seriesInterval String? // '1week' | '2weeks' | '3weeks' | '1month'
-  seriesIndex  Int?     // Index of this event in the series (0-based)
-  isCancelled  Boolean  @default(false)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  seriesId       String?   // ID linking events in a series (UUID of first event)
+  seriesInterval String?   // '1week' | '2weeks' | '3weeks' | '1month'
+  seriesIndex    Int?      // Index of this event in the series (0-based)
+  isCancelled    Boolean   @default(false)
+  listFrom       DateTime? // Early access: event visible to all only after this date; VIPs see before
+  vipOnly        Boolean   @default(false) // Only VIP Plus can see and join
+  isCuratedPick  Boolean   @default(false) // Featured in weekly VIP picks
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   // Relations
   organizerId String

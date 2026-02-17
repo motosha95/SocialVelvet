@@ -51,6 +51,9 @@ const updateEventSchema = z.object({
     .max(3)
     .optional()
     .transform((arr) => (arr ? validateTopics(arr) : undefined)),
+  listFrom: z.string().datetime().optional().nullable(),
+  vipOnly: z.boolean().optional(),
+  isCuratedPick: z.boolean().optional(),
   updateAllFutureEvents: z.boolean().optional(),
 });
 
@@ -232,6 +235,9 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     if (body.pricingTiers !== undefined) updateData.pricingTiers = body.pricingTiers;
     if (body.currency !== undefined) updateData.currency = body.currency;
     if (body.topics !== undefined) updateData.topics = body.topics;
+    if (body.listFrom !== undefined) updateData.listFrom = body.listFrom ? new Date(body.listFrom) : null;
+    if (body.vipOnly !== undefined) updateData.vipOnly = body.vipOnly;
+    if (body.isCuratedPick !== undefined) updateData.isCuratedPick = body.isCuratedPick;
 
     const updateAllFutureEvents = body.updateAllFutureEvents === true;
 

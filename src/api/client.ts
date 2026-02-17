@@ -111,11 +111,18 @@ export const apiClient = {
     });
 
     if (!response.ok) {
-      const error: ApiError = await response.json();
-      throw new Error(error.error?.message || `Request failed: ${response.statusText}`);
+      let message = `Request failed: ${response.statusText}`;
+      try {
+        const error: ApiError = await response.json();
+        message = error.error?.message || message;
+      } catch {
+        // Server may have returned non-JSON (e.g. HTML error page)
+      }
+      throw new Error(message);
     }
 
-    return await response.json();
+    const text = await response.text();
+    return (text ? JSON.parse(text) : {}) as T;
   },
 
   /**

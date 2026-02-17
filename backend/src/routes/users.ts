@@ -4,7 +4,7 @@ import { prisma } from '../db/client';
 import { AppError } from '../middleware/errorHandler';
 import { followsService } from '../services/follows';
 import { challengesService } from '../services/challenges';
-import { calculatePointsForAttendance, getEffectivePriceForPoints } from '../constants/gamification';
+import { calculatePointsForAttendance, getEffectivePriceForPoints, applyVipPointsMultiplier } from '../constants/gamification';
 import { z } from 'zod';
 
 export const usersRouter = express.Router();
@@ -13,6 +13,10 @@ const updateProfileSchema = z.object({
   name: z.string().min(1).optional(),
   bio: z.string().max(500).optional(),
   avatarUrl: z.string().url().optional(),
+});
+
+const updateSubscriptionSchema = z.object({
+  tier: z.enum(['vip', 'vip_plus']).nullable(),
 });
 
 // Get current user profile (syncs points from admitted events if out of date)
@@ -31,22 +35,23 @@ usersRouter.get('/me', authenticate, async (req: AuthRequest, res, next) => {
       createdAt: true,
     } as const;
 
-    let user: { id: string; email: string; name: string; avatarUrl: string | null; bio: string | null; createdAt: Date; points?: number } | null;
+    let user: { id: string; email: string; name: string; avatarUrl: string | null; bio: string | null; createdAt: Date; points?: number; vipTier?: string | null } | null;
 
     try {
       user = await prisma.user.findUnique({
         where: { id: req.userId },
-        select: { ...baseSelect, points: true },
+        select: { ...baseSelect, points: true, vipTier: true },
       });
     } catch (dbErr) {
       console.error('GET /users/me findUnique failed:', dbErr);
-      // Fallback: fetch without points (in case points column is missing or Prisma client is stale)
+      // Fallback: fetch without points/vipTier (in case columns are missing or Prisma client is stale)
       user = await prisma.user.findUnique({
         where: { id: req.userId },
         select: baseSelect,
       });
       if (user) {
         (user as { points?: number }).points = 0;
+        (user as { vipTier?: string | null }).vipTier = null;
       }
     }
 
@@ -65,13 +70,14 @@ usersRouter.get('/me', authenticate, async (req: AuthRequest, res, next) => {
           event: { select: { price: true, pricingTiers: true } },
         },
       });
-      const expectedPoints = admittedAttendees.reduce((sum, a) => {
+      const baseExpectedPoints = admittedAttendees.reduce((sum, a) => {
         const effectivePrice = getEffectivePriceForPoints(
           a.event.price != null ? Number(a.event.price) : null,
           Array.isArray(a.event.pricingTiers) ? (a.event.pricingTiers as Array<{ name: string; price: number }>) : null
         );
         return sum + calculatePointsForAttendance(effectivePrice);
       }, 0);
+      const expectedPoints = applyVipPointsMultiplier(baseExpectedPoints, user.vipTier as 'vip' | 'vip_plus' | null);
       const currentPoints = user.points ?? 0;
       if (expectedPoints > currentPoints) {
         await prisma.user.update({
@@ -109,6 +115,37 @@ usersRouter.patch('/me', authenticate, async (req: AuthRequest, res, next) => {
         avatarUrl: true,
         bio: true,
         points: true,
+        vipTier: true,
+        createdAt: true,
+      },
+    });
+
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update subscription tier (demo: no payment; in production gate behind payment)
+usersRouter.patch('/me/subscription', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+
+    const body = updateSubscriptionSchema.parse(req.body);
+
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { vipTier: body.tier },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        avatarUrl: true,
+        bio: true,
+        points: true,
+        vipTier: true,
         createdAt: true,
       },
     });

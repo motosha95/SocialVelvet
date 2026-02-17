@@ -11,6 +11,7 @@ interface UserState {
 interface UserActions {
   fetchProfile: () => Promise<void>;
   updateProfile: (data: UpdateProfileRequest) => Promise<void>;
+  updateSubscription: (tier: import('../../api/userApi').VipTier) => Promise<void>;
   clearProfile: () => void;
 }
 
@@ -43,6 +44,20 @@ export const useUserStore = create<UserStore>((set) => ({
       set({
         isLoading: false,
         error: err instanceof Error ? err.message : 'Failed to update profile',
+      });
+      throw err;
+    }
+  },
+
+  updateSubscription: async (tier: import('../../api/userApi').VipTier) => {
+    set({ isLoading: true, error: null });
+    try {
+      const profile = await userApi.updateSubscription(tier);
+      set({ profile, isLoading: false, error: null });
+    } catch (err) {
+      set({
+        isLoading: false,
+        error: err instanceof Error ? err.message : 'Failed to update subscription',
       });
       throw err;
     }

@@ -46,6 +46,10 @@ export interface Event {
   seriesInterval?: '1week' | '2weeks' | '3weeks' | '1month'; // Interval for series recurrence
   seriesIndex?: number; // Index of this event in the series (0-based)
   isCancelled?: boolean; // Whether the event has been cancelled
+  listFrom?: string; // ISO date; before this only VIPs see the event (early access)
+  vipOnly?: boolean; // Only VIP Plus can see and join
+  isCuratedPick?: boolean; // Featured in weekly VIP picks
+  vipDiscountPercent?: number; // 10 or 20 when user has VIP/VIP Plus and discount applied to price
   createdAt: string;
   updatedAt: string;
 }

@@ -25,3 +25,14 @@ export function getEffectivePriceForPoints(
   if (price != null && price > 0) return price;
   return null;
 }
+
+/** Points to display for user: base points, doubled if user has VIP or VIP Plus */
+export function getDisplayPointsForUser(
+  basePoints: number,
+  vipTier: string | null | undefined
+): number {
+  if (vipTier === 'vip' || vipTier === 'vip_plus') {
+    return basePoints * 2;
+  }
+  return basePoints;
+}

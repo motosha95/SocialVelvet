@@ -6,6 +6,8 @@ const getAuthToken = (): string | undefined => {
   return session?.accessToken;
 };
 
+export type VipTier = null | 'vip' | 'vip_plus';
+
 export interface UserProfile {
   id: string;
   email: string;
@@ -13,6 +15,7 @@ export interface UserProfile {
   avatarUrl?: string;
   bio?: string;
   points?: number;
+  vipTier?: VipTier;
   createdAt: string;
 }
 
@@ -33,5 +36,11 @@ export const userApi = {
     const token = getAuthToken();
     if (!token) throw new Error('Authentication required');
     return await apiClient.patch<UserProfile>('/users/me', data, token);
+  },
+
+  updateSubscription: async (tier: VipTier): Promise<UserProfile> => {
+    const token = getAuthToken();
+    if (!token) throw new Error('Authentication required');
+    return await apiClient.patch<UserProfile>('/users/me/subscription', { tier }, token);
   },
 };
