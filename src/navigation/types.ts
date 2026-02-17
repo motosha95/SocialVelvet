@@ -24,10 +24,15 @@ export type BookingsStackParamList = {
   [Routes.Bookings.Past]: undefined;
 };
 
+export type ProfileStackParamList = {
+  [Routes.Profile.Main]: undefined;
+  [Routes.Profile.VIPSubscription]: undefined;
+};
+
 export type AppTabsParamList = {
   [Routes.App.Events]: NavigatorScreenParams<EventsStackParamList>;
   [Routes.App.Chat]: NavigatorScreenParams<ChatStackParamList>;
-  [Routes.App.Profile]: undefined;
+  [Routes.App.Profile]: NavigatorScreenParams<ProfileStackParamList>;
   [Routes.App.Bookings]: NavigatorScreenParams<BookingsStackParamList>;
   [Routes.App.Challenges]: undefined;
 };

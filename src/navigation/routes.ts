@@ -25,4 +25,8 @@ export const Routes = {
     Upcoming: 'Bookings/Upcoming',
     Past: 'Bookings/Past',
   },
+  Profile: {
+    Main: 'Profile/Main',
+    VIPSubscription: 'Profile/VIPSubscription',
+  },
 } as const;

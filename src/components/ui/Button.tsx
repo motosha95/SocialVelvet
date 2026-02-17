@@ -4,7 +4,7 @@ import { Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { useTheme } from '../../theme/useTheme';
 import { AppText } from './AppText';
 
-type ButtonVariant = 'primary' | 'danger' | 'secondary';
+type ButtonVariant = 'primary' | 'danger' | 'secondary' | 'success';
 type ButtonSize = 'small' | 'medium' | 'large';
 
 interface ButtonProps {
@@ -25,6 +25,9 @@ export const Button = ({ label, onPress, variant = 'primary', size = 'medium', s
     
     if (variant === 'danger') {
       backgroundColor = theme.colors.danger;
+      textColor = theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF';
+    } else if (variant === 'success') {
+      backgroundColor = theme.colors.success;
       textColor = theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF';
     } else if (variant === 'secondary') {
       backgroundColor = theme.colors.border;

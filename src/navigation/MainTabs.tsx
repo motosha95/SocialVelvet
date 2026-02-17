@@ -9,7 +9,7 @@ import { Routes } from './routes';
 import { EventsStack } from './EventsStack';
 import { ChatStack } from './ChatStack';
 import { BookingsStack } from './BookingsStack';
-import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
+import { ProfileStack } from './ProfileStack';
 import { ChallengesScreen } from '../features/challenges/screens/ChallengesScreen';
 import { AppText } from '../components/ui/AppText';
 import { useTheme } from '../theme/useTheme';
@@ -144,7 +144,7 @@ export const MainTabs = (): React.JSX.Element => {
       />
       <Tabs.Screen 
         name={Routes.App.Profile} 
-        component={ProfileScreen} 
+        component={ProfileStack} 
         options={{ title: 'Profile' }} 
       />
     </Tabs.Navigator>

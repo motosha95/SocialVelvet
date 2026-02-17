@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
@@ -13,10 +13,10 @@ import { useAuthStore } from '../../../store/auth/authStore';
 import { useUserStore } from '../../../store/user/userStore';
 import { uploadApi } from '../../../api/uploadApi';
 import { fixAvatarUrl } from '../../../utils/avatarUtils';
-import type { AppTabsParamList } from '../../../navigation/types';
+import type { ProfileStackParamList } from '../../../navigation/types';
 import { Routes } from '../../../navigation/routes';
 
-type Props = BottomTabScreenProps<AppTabsParamList, typeof Routes.App.Profile>;
+type Props = NativeStackScreenProps<ProfileStackParamList, typeof Routes.Profile.Main>;
 
 export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
   const { theme, setMode } = useThemeContext();
@@ -320,6 +320,24 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
               />
             )}
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: theme.spacing.xs }}>
+            <AppText style={{ fontSize: 22, marginRight: theme.spacing.xs }}>👑</AppText>
+            <AppText style={styles.fieldLabel} color="muted">
+              VIP
+            </AppText>
+          </View>
+          <AppText style={{ marginBottom: theme.spacing.sm }}>
+            Unlock early access, double points, exclusive events, and more.
+          </AppText>
+          <Button
+            label="View VIP benefits"
+            onPress={() => navigation.navigate(Routes.Profile.VIPSubscription)}
+            variant="success"
+            style={{ marginBottom: theme.spacing.md }}
+          />
         </View>
 
         <View style={styles.card}>
