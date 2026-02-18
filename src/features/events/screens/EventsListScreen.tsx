@@ -31,8 +31,11 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
   const insets = useSafeAreaInsets();
   const events = useEventsStore((s) => s.events);
   const isLoading = useEventsStore((s) => s.isLoading);
+  const isLoadingMore = useEventsStore((s) => s.isLoadingMore);
+  const hasMore = useEventsStore((s) => s.hasMore);
   const error = useEventsStore((s) => s.error);
   const fetchEvents = useEventsStore((s) => s.fetchEvents);
+  const loadMoreEvents = useEventsStore((s) => s.loadMoreEvents);
   const refreshEvents = useEventsStore((s) => s.refreshEvents);
 
   type HostFilter = 'all' | 'following' | 'newHost';
@@ -82,7 +85,12 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
       );
     }
 
-    return result;
+    // Only show upcoming events (past events appear in My Bookings only)
+    const now = new Date();
+    result = result.filter((event) => new Date(event.date) >= now);
+
+    // Sort by earliest coming event first
+    return [...result].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [events, hostFilter, searchQuery, selectedTopics]);
 
   const styles = React.useMemo(() => {
@@ -232,6 +240,12 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
     flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
 
+  const handleEndReached = React.useCallback(() => {
+    if (hasMore && !isLoadingMore && !isLoading) {
+      void loadMoreEvents();
+    }
+  }, [hasMore, isLoadingMore, isLoading, loadMoreEvents]);
+
   const handleScroll = React.useCallback(
     (e: { nativeEvent: { contentOffset: { y: number } } }) => {
       const y = e.nativeEvent.contentOffset.y;
@@ -294,7 +308,10 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => <EventCard event={item} onPress={() => handleEventPress(item.id)} />}
         onScroll={handleScroll}
+        onEndReached={handleEndReached}
+        onEndReachedThreshold={0.3}
         scrollEventThrottle={16}
+        initialNumToRender={10}
         ListHeaderComponent={
           <View style={styles.filterSection}>
             <AppText style={styles.filterRowLabel}>Host</AppText>
@@ -368,6 +385,13 @@ export const EventsListScreen = ({ navigation }: Props): React.JSX.Element => {
               {!searchQuery.trim() && selectedTopics.length === 0 && hostFilter === 'all' && (
                 <Button label="Create your first event" onPress={handleCreateEvent} style={{ marginTop: theme.spacing.md }} />
               )}
+            </View>
+          ) : null
+        }
+        ListFooterComponent={
+          isLoadingMore ? (
+            <View style={{ paddingVertical: theme.spacing.md, alignItems: 'center' }}>
+              <ActivityIndicator size="small" color={theme.colors.primary} />
             </View>
           ) : null
         }

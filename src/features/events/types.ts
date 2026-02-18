@@ -9,6 +9,7 @@ export interface Event {
   imageUrl?: string;
   organizerId: string;
   organizerName: string;
+  organizerVipTier?: string; // 'vip' | 'vip_plus' for badge
   attendeeCount: number;
   maxAttendees?: number;
   isJoined: boolean;
@@ -25,7 +26,6 @@ export interface Event {
   seriesInterval?: SeriesInterval; // Interval for series recurrence
   seriesIndex?: number; // Index of this event in the series (0-based)
   isCancelled?: boolean; // Whether the event has been cancelled
-  listFrom?: string; // Early access: visible to all after this date; VIPs see before
   vipOnly?: boolean; // Only VIP Plus can see and join
   isCuratedPick?: boolean; // Featured in weekly VIP picks
   vipDiscountPercent?: number; // 10 or 20 when user has VIP discount applied
@@ -42,6 +42,7 @@ export interface EventCoHost {
   userId: string;
   userName: string;
   userAvatarUrl?: string;
+  userVipTier?: string; // 'vip' | 'vip_plus' for badge
   canEdit: boolean;
   createdAt: string;
 }
@@ -79,7 +80,6 @@ export interface UpdateEventRequest {
   pricingTiers?: PricingTier[] | null;
   currency?: string;
   topics?: string[];
-  listFrom?: string | null; // ISO date; before this only VIPs see event (early access)
   vipOnly?: boolean;
   isCuratedPick?: boolean;
   updateAllFutureEvents?: boolean; // If true, applies changes to all future events in the series
@@ -98,6 +98,7 @@ export interface EventAttendee {
   userId: string;
   name: string;
   avatarUrl?: string;
+  vipTier?: string; // 'vip' | 'vip_plus' for badge
   joinedAt: string;
   admittedAt?: string; // When ticket was scanned/admitted
 }

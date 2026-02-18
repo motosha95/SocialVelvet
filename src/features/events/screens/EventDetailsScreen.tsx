@@ -27,6 +27,7 @@ import type { EventAttendee, EventCoHost } from '../types';
 import { getSeriesLabel } from '../utils/seriesUtils';
 import { calculatePointsForAttendance, getEffectivePriceForPoints, getDisplayPointsForUser } from '../utils/pointsUtils';
 import { useUserStore } from '../../../store/user/userStore';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -835,7 +836,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
               </View>
               <View style={{ flex: 1 }}>
                 <AppText style={[styles.detailLabel, { color: theme.colors.mutedText }]}>Organized by</AppText>
-                <AppText style={[styles.detailValue, { color: theme.colors.text }]}>{event.organizerName}</AppText>
+                <UserNameWithBadge name={event.organizerName} vipTier={event.organizerVipTier as 'vip' | 'vip_plus' | null} />
               </View>
               {userId && event.organizerId !== userId && (
                 <Button
@@ -865,16 +866,11 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
             )}
 
             {/* VIP badges */}
-            {(event.vipOnly || event.listFrom || event.isCuratedPick) && (
+            {(event.vipOnly || event.isCuratedPick) && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.xs, marginTop: theme.spacing.sm }}>
                 {event.vipOnly && (
                   <View style={[styles.topicTag, { backgroundColor: theme.colors.success + '25' }]}>
                     <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.success }}>👑 VIP Plus only</AppText>
-                  </View>
-                )}
-                {event.listFrom && new Date(event.listFrom) > new Date() && (
-                  <View style={[styles.topicTag, { backgroundColor: theme.colors.primaryLight }]}>
-                    <AppText style={{ fontSize: 12, fontWeight: '600', color: theme.colors.primary }}>✨ Early access</AppText>
                   </View>
                 )}
                 {event.isCuratedPick && (
@@ -1085,8 +1081,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                         )}
                       </View>
                       <View style={styles.attendeeInfo}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                          <AppText>{item.name}</AppText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, flexWrap: 'wrap' }}>
+                          <UserNameWithBadge name={item.name} vipTier={item.vipTier as 'vip' | 'vip_plus' | null} />
                           {item.userId === event.organizerId && (
                             <View style={styles.badge}>
                               <AppText variant="caption" style={styles.badgeText}>Host</AppText>
@@ -1151,7 +1147,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                     {
                       userId: event.organizerId,
                       userName: event.organizerName,
-                      userAvatarUrl: undefined, // Could fetch organizer avatar if needed
+                      userAvatarUrl: undefined,
+                      userVipTier: event.organizerVipTier,
                       role: 'Host' as const,
                       canEdit: true,
                       isOrganizer: true,
@@ -1176,8 +1173,8 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                         )}
                       </View>
                       <View style={styles.attendeeInfo}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                          <AppText>{item.userName}</AppText>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs, flexWrap: 'wrap' }}>
+                          <UserNameWithBadge name={item.userName} vipTier={item.userVipTier as 'vip' | 'vip_plus' | null} />
                           <View
                             style={{
                               backgroundColor: theme.colors.primary + '20',

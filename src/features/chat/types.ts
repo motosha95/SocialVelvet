@@ -5,12 +5,14 @@ export interface Conversation {
     userId: string;
     name: string;
     avatarUrl?: string;
+    vipTier?: string;
   }>;
   lastMessage?: {
     id: string;
     content: string;
     senderId: string;
     senderName: string;
+    senderVipTier?: string;
     createdAt: string;
   };
   updatedAt: string;
@@ -22,5 +24,6 @@ export interface Message {
   senderId: string;
   senderName: string;
   senderAvatarUrl?: string;
+  senderVipTier?: string;
   createdAt: string;
 }

@@ -8,6 +8,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { useThemeContext } from '../../../theme/ThemeProvider';
 import { useAuthStore } from '../../../store/auth/authStore';
 import { useUserStore } from '../../../store/user/userStore';
@@ -247,7 +248,7 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
               )}
             </View>
           </TouchableOpacity>
-          <AppText variant="title">{profile?.name}</AppText>
+          <UserNameWithBadge name={profile?.name ?? ''} vipTier={profile?.vipTier} variant="title" />
           <AppText color="muted">{profile?.email}</AppText>
           <View style={[styles.pointsBadge, { marginTop: theme.spacing.sm }]}>
             <AppText style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 16 }}>
@@ -259,22 +260,6 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
                 : 'Earn points by attending events (ticket scanned)'}
             </AppText>
           </View>
-          {(profile?.vipTier === 'vip' || profile?.vipTier === 'vip_plus') && (
-            <View
-              style={[
-                styles.pointsBadge,
-                {
-                  marginTop: theme.spacing.sm,
-                  backgroundColor: theme.colors.success + '20',
-                  borderColor: theme.colors.success + '50',
-                },
-              ]}
-            >
-              <AppText style={{ color: theme.colors.success, fontWeight: '600', fontSize: 14 }}>
-                👑 {profile.vipTier === 'vip_plus' ? 'VIP Plus' : 'VIP'}
-              </AppText>
-            </View>
-          )}
         </View>
 
         <View style={styles.card}>
@@ -348,7 +333,7 @@ export const ProfileScreen = ({ navigation }: Props): React.JSX.Element => {
             </AppText>
           </View>
           <AppText style={{ marginBottom: theme.spacing.sm }}>
-            Unlock early access, double points, exclusive events, and more.
+            Unlock curated events first, double points, exclusive events, and more.
           </AppText>
           <Button
             label="View VIP benefits"

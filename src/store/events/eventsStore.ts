@@ -6,9 +6,13 @@ import type { EventsActions, EventsState } from './types';
 
 export type EventsStore = EventsState & EventsActions;
 
+const PAGE_SIZE = 10;
+
 export const useEventsStore = create<EventsStore>((set, get) => ({
   events: [],
   isLoading: false,
+  isLoadingMore: false,
+  hasMore: true,
   error: null,
 
   fetchEvents: async () => {
@@ -17,15 +21,46 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
       return;
     }
 
-    set({ isLoading: true, error: null });
+    set({ isLoading: true, error: null, hasMore: true });
 
     try {
-      const events = await eventsApi.list(true); // Prioritize events from followed hosts
-      set({ events, isLoading: false, error: null });
+      const events = await eventsApi.list(true, PAGE_SIZE, 0);
+      set({
+        events,
+        isLoading: false,
+        error: null,
+        hasMore: events.length >= PAGE_SIZE,
+      });
     } catch (err) {
       set({
         isLoading: false,
+        hasMore: false,
         error: err instanceof Error ? err.message : 'Failed to load events',
+      });
+    }
+  },
+
+  loadMoreEvents: async () => {
+    const state = get();
+    if (state.isLoadingMore || !state.hasMore || state.isLoading) {
+      return;
+    }
+
+    set({ isLoadingMore: true });
+
+    try {
+      const offset = state.events.length;
+      const more = await eventsApi.list(true, PAGE_SIZE, offset);
+      const events = [...state.events, ...more];
+      set({
+        events,
+        isLoadingMore: false,
+        hasMore: more.length >= PAGE_SIZE,
+      });
+    } catch (err) {
+      set({
+        isLoadingMore: false,
+        hasMore: false,
       });
     }
   },
@@ -34,8 +69,8 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
     set({ error: null });
 
     try {
-      const events = await eventsApi.list(true);
-      set({ events, error: null });
+      const events = await eventsApi.list(true, PAGE_SIZE, 0);
+      set({ events, error: null, hasMore: events.length >= PAGE_SIZE });
     } catch (err) {
       set({
         error: err instanceof Error ? err.message : 'Failed to refresh events',

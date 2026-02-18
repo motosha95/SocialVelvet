@@ -2,6 +2,7 @@ import React from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
 import { AppText } from '../../../components/ui/AppText';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { EventImage } from '../../../components/ui/EventImage';
 import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../types';
@@ -13,11 +14,14 @@ import { useUserStore } from '../../../store/user/userStore';
 interface EventCardProps {
   event: Event;
   onPress: () => void;
+  /** When true, renders the card with a disabled/muted appearance */
+  isPast?: boolean;
 }
 
-export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element => {
+export const EventCard = ({ event, onPress, isPast }: EventCardProps): React.JSX.Element => {
   const theme = useTheme();
   const profile = useUserStore((s) => s.profile);
+  const past = isPast ?? new Date(event.date) < new Date();
 
   const styles = React.useMemo(() => {
     return StyleSheet.create({
@@ -28,6 +32,7 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         borderRadius: 14,
         overflow: 'hidden',
         marginBottom: theme.spacing.sm,
+        opacity: past ? 0.6 : 1,
         ...theme.shadow('sm'),
       },
       imageContainer: {
@@ -119,7 +124,7 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
         color: theme.colors.primary,
       },
     });
-  }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, theme.colors, theme.spacing, theme.typography, theme.shadow]);
+  }, [event.isJoined, event.seriesInterval, event.isFromFollowedHost, past, theme.colors, theme.spacing, theme.typography, theme.shadow]);
 
   const formatDate = (dateString: string): string => {
     const date = new Date(dateString);
@@ -189,10 +194,11 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
               📍 {event.location}
             </AppText>
           </View>
-          <View style={styles.meta}>
+          <View style={[styles.meta, { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }]}>
+            <AppText color="muted" variant="caption">👤 </AppText>
+            <UserNameWithBadge name={event.organizerName} vipTier={event.organizerVipTier as 'vip' | 'vip_plus' | null} variant="caption" />
             <AppText color="muted" variant="caption">
-              👤 {event.organizerName} · {event.attendeeCount}
-              {event.maxAttendees ? `/${event.maxAttendees}` : ''} going
+              · {event.attendeeCount}{event.maxAttendees ? `/${event.maxAttendees}` : ''} going
             </AppText>
           </View>
 
@@ -252,11 +258,6 @@ export const EventCard = ({ event, onPress }: EventCardProps): React.JSX.Element
           {event.vipOnly && (
             <View style={[styles.seriesBadge, { backgroundColor: theme.colors.success + '25' }]}>
               <AppText style={[styles.seriesBadgeText, { color: theme.colors.success }]} variant="caption">👑 VIP</AppText>
-            </View>
-          )}
-          {event.listFrom && new Date(event.listFrom) > new Date() && (
-            <View style={[styles.seriesBadge, { backgroundColor: theme.colors.primaryLight }]}>
-              <AppText style={[styles.seriesBadgeText, { color: theme.colors.primary }]} variant="caption">✨ Early</AppText>
             </View>
           )}
           {event.isCuratedPick && (

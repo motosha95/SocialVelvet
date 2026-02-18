@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { useTheme } from '../../../theme/useTheme';
 import { useChatStore } from '../../../store/chat/chatStore';
 import { useAuthStore } from '../../../store/auth/authStore';
@@ -111,8 +112,8 @@ export const ChatListScreen = ({ navigation }: Props): React.JSX.Element => {
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => {
             const others = getOtherParticipants(item);
-            const displayName = others.length > 0 
-              ? others.map(p => p.name).join(', ')
+            const displayName = others.length > 0
+              ? others.map((p) => p.name).join(', ')
               : 'You';
 
             return (
@@ -125,7 +126,20 @@ export const ChatListScreen = ({ navigation }: Props): React.JSX.Element => {
                 </View>
                 <View style={styles.content}>
                   <View style={styles.header}>
-                    <AppText variant="subtitle">{displayName}</AppText>
+                    {others.length === 0 ? (
+                      <AppText variant="title">You</AppText>
+                    ) : others.length === 1 ? (
+                      <UserNameWithBadge name={others[0].name} vipTier={others[0].vipTier as 'vip' | 'vip_plus' | null} variant="title" />
+                    ) : (
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 4 }}>
+                        {others.map((p, i) => (
+                          <React.Fragment key={p.userId}>
+                            {i > 0 && <AppText variant="caption" color="muted">, </AppText>}
+                            <UserNameWithBadge name={p.name} vipTier={p.vipTier as 'vip' | 'vip_plus' | null} variant="title" />
+                          </React.Fragment>
+                        ))}
+                      </View>
+                    )}
                     {item.lastMessage && (
                       <AppText color="muted" variant="caption">
                         {new Date(item.lastMessage.createdAt).toLocaleDateString()}

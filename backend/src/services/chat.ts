@@ -19,6 +19,7 @@ export const chatService = {
                 id: true,
                 name: true,
                 avatarUrl: true,
+                vipTier: true,
               },
             },
           },
@@ -34,6 +35,7 @@ export const chatService = {
                 id: true,
                 name: true,
                 avatarUrl: true,
+                vipTier: true,
               },
             },
           },
@@ -51,6 +53,7 @@ export const chatService = {
         userId: p.user.id,
         name: p.user.name,
         avatarUrl: p.user.avatarUrl,
+        vipTier: p.user.vipTier ?? undefined,
       })),
       lastMessage: conv.messages[0]
         ? {
@@ -58,6 +61,7 @@ export const chatService = {
             content: conv.messages[0].content,
             senderId: conv.messages[0].senderId,
             senderName: conv.messages[0].sender.name,
+            senderVipTier: conv.messages[0].sender.vipTier ?? undefined,
             createdAt: conv.messages[0].createdAt.toISOString(),
           }
         : null,
@@ -90,6 +94,7 @@ export const chatService = {
             id: true,
             name: true,
             avatarUrl: true,
+            vipTier: true,
           },
         },
       },
@@ -104,6 +109,7 @@ export const chatService = {
       senderId: msg.senderId,
       senderName: msg.sender.name,
       senderAvatarUrl: msg.sender.avatarUrl,
+      senderVipTier: msg.sender.vipTier ?? undefined,
       createdAt: msg.createdAt.toISOString(),
     }));
   },
@@ -133,6 +139,7 @@ export const chatService = {
                 id: true,
                 name: true,
                 avatarUrl: true,
+                vipTier: true,
               },
             },
           },
@@ -147,6 +154,7 @@ export const chatService = {
         userId: p.user.id,
         name: p.user.name,
         avatarUrl: p.user.avatarUrl,
+        vipTier: p.user.vipTier ?? undefined,
       })),
     };
   },
@@ -182,6 +190,7 @@ export const chatService = {
             id: true,
             name: true,
             avatarUrl: true,
+            vipTier: true,
           },
         },
       },
@@ -199,6 +208,7 @@ export const chatService = {
       senderId: message.senderId,
       senderName: message.sender.name,
       senderAvatarUrl: message.sender.avatarUrl,
+      senderVipTier: message.sender.vipTier ?? undefined,
       createdAt: message.createdAt.toISOString(),
     };
   },

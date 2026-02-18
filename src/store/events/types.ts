@@ -3,11 +3,14 @@ import type { Event } from '../../features/events/types';
 export interface EventsState {
   events: Event[];
   isLoading: boolean;
+  isLoadingMore: boolean;
+  hasMore: boolean;
   error: string | null;
 }
 
 export interface EventsActions {
   fetchEvents: () => Promise<void>;
+  loadMoreEvents: () => Promise<void>;
   refreshEvents: () => Promise<void>;
   joinEvent: (eventId: string) => Promise<void>;
   leaveEvent: (eventId: string) => Promise<void>;

@@ -15,9 +15,12 @@ const VIP_TIERS = [
     tagline: 'Great value to get more from events',
     icon: '⭐',
     accentColor: '#059669',
+    price: 29,
+    currency: 'AED',
+    period: 'month',
     features: [
       { icon: '⭐', text: 'Double points on every event' },
-      { icon: '🎫', text: 'Early access to events' },
+      { icon: '📌', text: 'Curated events first in your feed' },
       { icon: '👑', text: 'VIP badge on your profile' },
       { icon: '💰', text: '10% off selected events' },
       { icon: '📧', text: 'Weekly curated event picks' },
@@ -29,9 +32,12 @@ const VIP_TIERS = [
     tagline: 'The full premium experience',
     icon: '👑',
     accentColor: '#D97706',
+    price: 49,
+    currency: 'AED',
+    period: 'month',
     features: [
       { icon: '⭐', text: 'Double points on every event' },
-      { icon: '🎫', text: 'Early access to events' },
+      { icon: '📌', text: 'Curated events first in your feed' },
       { icon: '👑', text: 'VIP badge on your profile' },
       { icon: '💰', text: '20% off selected events' },
       { icon: '✨', text: 'Exclusive VIP-only events' },
@@ -109,8 +115,23 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
       tierTagline: {
         fontSize: 14,
         color: theme.colors.mutedText,
-        marginBottom: theme.spacing.md,
+        marginBottom: theme.spacing.xs,
         lineHeight: 20,
+      },
+      tierPrice: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        marginBottom: theme.spacing.md,
+        gap: 4,
+      },
+      tierPriceAmount: {
+        fontSize: 28,
+        fontWeight: '700',
+        color: theme.colors.text,
+      },
+      tierPricePeriod: {
+        fontSize: 15,
+        color: theme.colors.mutedText,
       },
       featureRow: {
         flexDirection: 'row',
@@ -138,6 +159,19 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
       },
       subscribeButton: {
         marginTop: theme.spacing.md,
+      },
+      autoRenewNote: {
+        marginTop: theme.spacing.lg,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 12,
+        backgroundColor: theme.colors.border + '40',
+      },
+      autoRenewText: {
+        fontSize: 13,
+        color: theme.colors.mutedText,
+        textAlign: 'center',
+        lineHeight: 20,
       },
     });
   }, [theme]);
@@ -193,6 +227,10 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
               <AppText style={styles.tierName}>{tier.name}</AppText>
             </View>
             <AppText style={styles.tierTagline}>{tier.tagline}</AppText>
+            <View style={styles.tierPrice}>
+              <AppText style={styles.tierPriceAmount}>{tier.price} {tier.currency}</AppText>
+              <AppText style={styles.tierPricePeriod}>/ {tier.period}</AppText>
+            </View>
             {tier.features.map((feature, index) => (
               <View key={index} style={styles.featureRow}>
                 <AppText style={styles.featureIcon}>{feature.icon}</AppText>
@@ -217,6 +255,11 @@ export const VIPSubscriptionScreen = (): React.JSX.Element => {
             })()}
           </View>
         ))}
+        <View style={styles.autoRenewNote}>
+          <AppText style={styles.autoRenewText}>
+            Subscriptions auto-renew each {VIP_TIERS[0].period}. You can cancel anytime from your profile. Payment will be charged to your account at confirmation of purchase.
+          </AppText>
+        </View>
       </ScrollView>
     </Screen>
   );

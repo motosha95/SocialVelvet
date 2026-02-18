@@ -83,6 +83,7 @@ export const eventsService = {
       imageUrl: prismaEvent.imageUrl || undefined,
       organizerId: prismaEvent.organizerId,
       organizerName: prismaEvent.organizer.name,
+      organizerVipTier: prismaEvent.organizer?.vipTier ?? undefined,
       attendeeCount,
       maxAttendees: prismaEvent.maxAttendees || undefined,
       isJoined,
@@ -98,7 +99,6 @@ export const eventsService = {
       seriesIndex: prismaEvent.seriesIndex !== null ? prismaEvent.seriesIndex : undefined,
       isCancelled: prismaEvent.isCancelled === true,
       isFromFollowedHost: userId && followedOrganizerIds ? followedOrganizerIds.has(prismaEvent.organizerId) : undefined,
-      listFrom: prismaEvent.listFrom ? new Date(prismaEvent.listFrom).toISOString() : undefined,
       vipOnly: prismaEvent.vipOnly === true,
       isCuratedPick: prismaEvent.isCuratedPick === true,
       vipDiscountPercent,
@@ -112,6 +112,7 @@ export const eventsService = {
         userId: ch.userId,
         userName: ch.user.name,
         userAvatarUrl: ch.user.avatarUrl || undefined,
+        userVipTier: ch.user?.vipTier ?? undefined,
         canEdit: ch.canEdit,
         createdAt: ch.createdAt.toISOString(),
       }));
@@ -122,9 +123,15 @@ export const eventsService = {
 
   /**
    * Get all events. When prioritizeFollowed is true and userId is set, events from followed hosts come first.
-   * VIP: early access (events with listFrom before now are visible), VIP Plus: also vipOnly events. Discounts applied when user has tier.
+   * VIP/VIP Plus: curated (staff pick) events are sorted to the top. VIP Plus also sees vipOnly events. Discounts applied when user has tier.
+   * Pagination: limit (default 10, max 50) and offset (default 0) control the returned slice.
    */
-  listEvents: async (userId?: string, prioritizeFollowed: boolean = false): Promise<Event[]> => {
+  listEvents: async (
+    userId?: string,
+    prioritizeFollowed: boolean = false,
+    limit: number = 10,
+    offset: number = 0
+  ): Promise<Event[]> => {
     let followedIds = new Set<string>();
     let vipTier: string | null = null;
     if (userId) {
@@ -146,6 +153,7 @@ export const eventsService = {
           select: {
             id: true,
             name: true,
+            vipTier: true,
           },
         },
         attendees: {
@@ -155,29 +163,33 @@ export const eventsService = {
       orderBy: { date: 'asc' },
     });
 
-    const now = new Date();
     const filtered = events.filter((event: any) => {
       if (event.vipOnly === true && vipTier !== 'vip_plus') return false;
-      if (event.listFrom && new Date(event.listFrom) > now && vipTier !== 'vip' && vipTier !== 'vip_plus') return false;
       return true;
     });
 
     let result = filtered.map((event: any) => eventsService.transformEvent(event, userId, false, followedIds, vipTier));
 
-    if (userId && prioritizeFollowed && followedIds.size > 0) {
-      result = [...result].sort((a, b) => {
+    // Sort: for VIPs put curated (staff pick) events first; then by followed (if requested); then by date
+    result = [...result].sort((a, b) => {
+      if (userId && prioritizeFollowed && followedIds.size > 0) {
         const aFollowed = a.isFromFollowedHost ? 1 : 0;
         const bFollowed = b.isFromFollowedHost ? 1 : 0;
         if (bFollowed !== aFollowed) return bFollowed - aFollowed;
-        return new Date(a.date).getTime() - new Date(b.date).getTime();
-      });
-    }
+      }
+      if (vipTier === 'vip' || vipTier === 'vip_plus') {
+        const aCurated = a.isCuratedPick ? 1 : 0;
+        const bCurated = b.isCuratedPick ? 1 : 0;
+        if (bCurated !== aCurated) return bCurated - aCurated;
+      }
+      return new Date(a.date).getTime() - new Date(b.date).getTime();
+    });
 
-    return result;
+    return result.slice(offset, offset + limit);
   },
 
   /**
-   * Get event by ID. Returns null if event is vipOnly and user is not VIP Plus, or listFrom is in future and user is not VIP.
+   * Get event by ID. Returns null if event is vipOnly and user is not VIP Plus.
    */
   getEventById: async (id: string, userId?: string, includeCoHosts: boolean = false): Promise<Event | null> => {
     const event = await prisma.event.findUnique({
@@ -187,6 +199,7 @@ export const eventsService = {
           select: {
             id: true,
             name: true,
+            vipTier: true,
           },
         },
         attendees: {
@@ -200,6 +213,7 @@ export const eventsService = {
                     id: true,
                     name: true,
                     avatarUrl: true,
+                    vipTier: true,
                   },
                 },
               },
@@ -222,9 +236,6 @@ export const eventsService = {
     }
 
     if ((event as any).vipOnly === true && vipTier !== 'vip_plus') {
-      return null;
-    }
-    if ((event as any).listFrom && new Date((event as any).listFrom) > new Date() && vipTier !== 'vip' && vipTier !== 'vip_plus') {
       return null;
     }
 
@@ -323,6 +334,7 @@ export const eventsService = {
                 select: {
                   id: true,
                   name: true,
+                  vipTier: true,
                 },
               },
               attendees: {
@@ -363,6 +375,7 @@ export const eventsService = {
             select: {
               id: true,
               name: true,
+              vipTier: true,
             },
           },
           attendees: {
@@ -543,6 +556,7 @@ export const eventsService = {
             id: true,
             name: true,
             avatarUrl: true,
+            vipTier: true,
           },
         },
       },
@@ -555,6 +569,7 @@ export const eventsService = {
       userId: attendee.userId,
       name: attendee.user.name,
       avatarUrl: attendee.user.avatarUrl || undefined,
+      vipTier: attendee.user.vipTier ?? undefined,
       joinedAt: attendee.joinedAt.toISOString(),
       admittedAt: attendee.admittedAt?.toISOString(),
     }));
@@ -579,7 +594,6 @@ export const eventsService = {
       pricingTiers?: Array<{ name: string; price: number }> | null;
       currency?: string;
       topics?: string[];
-      listFrom?: Date | null;
       vipOnly?: boolean;
       isCuratedPick?: boolean;
     },
@@ -624,7 +638,6 @@ export const eventsService = {
     if (data.pricingTiers !== undefined) updateData.pricingTiers = data.pricingTiers as unknown;
     if (data.currency !== undefined) updateData.currency = data.currency;
     if (data.topics !== undefined) updateData.topics = data.topics;
-    if (data.listFrom !== undefined) updateData.listFrom = data.listFrom;
     if (data.vipOnly !== undefined) updateData.vipOnly = data.vipOnly;
     if (data.isCuratedPick !== undefined) updateData.isCuratedPick = data.isCuratedPick;
 
@@ -666,6 +679,7 @@ export const eventsService = {
           select: {
             id: true,
             name: true,
+            vipTier: true,
           },
         },
         attendees: {
@@ -838,6 +852,7 @@ export const eventsService = {
             id: true,
             name: true,
             avatarUrl: true,
+            vipTier: true,
           },
         },
       },
@@ -850,6 +865,7 @@ export const eventsService = {
       userId: ch.userId,
       userName: ch.user.name,
       userAvatarUrl: ch.user.avatarUrl || undefined,
+      userVipTier: ch.user.vipTier ?? undefined,
       canEdit: ch.canEdit,
       createdAt: ch.createdAt.toISOString(),
     }));

@@ -28,10 +28,20 @@ const getAuthToken = (): string | undefined => {
   return session.accessToken;
 };
 
+const EVENTS_PAGE_SIZE = 10;
+
 export const eventsApi = {
-  list: async (prioritizeFollowed: boolean = false): Promise<Event[]> => {
+  list: async (
+    prioritizeFollowed: boolean = false,
+    limit: number = EVENTS_PAGE_SIZE,
+    offset: number = 0
+  ): Promise<Event[]> => {
     const token = getAuthToken();
-    const query = prioritizeFollowed ? '?prioritizeFollowed=true' : '';
+    const params = new URLSearchParams();
+    if (prioritizeFollowed) params.set('prioritizeFollowed', 'true');
+    params.set('limit', String(limit));
+    params.set('offset', String(offset));
+    const query = params.toString() ? `?${params.toString()}` : '';
     return await apiClient.get<Event[]>(`/events${query}`, token);
   },
 

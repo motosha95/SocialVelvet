@@ -5,6 +5,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Screen } from '../../../components/layout/Screen';
 import { AppText } from '../../../components/ui/AppText';
 import { Button } from '../../../components/ui/Button';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { useTheme } from '../../../theme/useTheme';
 import { useChatStore } from '../../../store/chat/chatStore';
 import { useAuthStore } from '../../../store/auth/authStore';
@@ -164,7 +165,11 @@ export const ChatDetailScreen = ({ route, navigation }: Props): React.JSX.Elemen
                 ]}
               >
                 {!isMyMessage && (
-                  <AppText style={styles.messageSender}>{item.senderName}</AppText>
+                  <UserNameWithBadge
+                    name={item.senderName}
+                    vipTier={item.senderVipTier as 'vip' | 'vip_plus' | null}
+                    style={styles.messageSender}
+                  />
                 )}
                 <AppText style={isMyMessage ? styles.myMessageText : styles.messageText}>
                   {item.content}

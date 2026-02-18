@@ -51,7 +51,6 @@ const updateEventSchema = z.object({
     .max(3)
     .optional()
     .transform((arr) => (arr ? validateTopics(arr) : undefined)),
-  listFrom: z.string().datetime().optional().nullable(),
   vipOnly: z.boolean().optional(),
   isCuratedPick: z.boolean().optional(),
   updateAllFutureEvents: z.boolean().optional(),
@@ -76,11 +75,14 @@ const cancelEventSchema = z.object({
 });
 
 // Get all events (public, but includes isJoined if authenticated). ?prioritizeFollowed=true puts events from followed hosts first.
+// Supports pagination: ?limit=10&offset=0 (default limit 10, offset 0). Returns array; when fewer than limit returned, no more pages.
 eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
   try {
     const userId = req.userId;
     const prioritizeFollowed = req.query.prioritizeFollowed === 'true';
-    const events = await eventsService.listEvents(userId, prioritizeFollowed);
+    const limit = Math.min(Math.max(1, parseInt(String(req.query.limit || 10), 10) || 10), 50);
+    const offset = Math.max(0, parseInt(String(req.query.offset || 0), 10) || 0);
+    const events = await eventsService.listEvents(userId, prioritizeFollowed, limit, offset);
     res.json(events);
   } catch (err) {
     next(err);
@@ -235,7 +237,6 @@ eventsRouter.patch('/:id', authenticate, async (req: AuthRequest, res, next) => 
     if (body.pricingTiers !== undefined) updateData.pricingTiers = body.pricingTiers;
     if (body.currency !== undefined) updateData.currency = body.currency;
     if (body.topics !== undefined) updateData.topics = body.topics;
-    if (body.listFrom !== undefined) updateData.listFrom = body.listFrom ? new Date(body.listFrom) : null;
     if (body.vipOnly !== undefined) updateData.vipOnly = body.vipOnly;
     if (body.isCuratedPick !== undefined) updateData.isCuratedPick = body.isCuratedPick;
 

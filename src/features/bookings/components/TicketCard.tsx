@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
 import { AppText } from '../../../components/ui/AppText';
+import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { EventImage } from '../../../components/ui/EventImage';
 import { useTheme } from '../../../theme/useTheme';
 import type { Event } from '../../events/types';
@@ -145,10 +146,9 @@ export const TicketCard = ({ event, ticketNumber, userId }: TicketCardProps): Re
             📍 {event.location}
           </AppText>
         </View>
-        <View style={styles.metaRow}>
-          <AppText color="muted" variant="caption">
-            👤 {event.organizerName}
-          </AppText>
+        <View style={[styles.metaRow, { flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+          <AppText color="muted" variant="caption">👤 </AppText>
+          <UserNameWithBadge name={event.organizerName} vipTier={event.organizerVipTier as 'vip' | 'vip_plus' | null} variant="caption" />
         </View>
       </View>
 
