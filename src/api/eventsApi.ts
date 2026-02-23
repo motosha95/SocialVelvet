@@ -68,12 +68,23 @@ export const eventsApi = {
     return await apiClient.post<CreateEventResponse>('/events', req, token);
   },
 
-  join: async (eventId: string): Promise<void> => {
+  join: async (
+    eventId: string,
+    paymentMethod?: 'points' | 'cash' | 'credit_card',
+    pointsAmount?: number
+  ): Promise<void> => {
     const token = getAuthToken();
     if (!token) {
       throw new Error('Authentication required to join events');
     }
-    await apiClient.post(`/events/${eventId}/join`, {}, token);
+    const body: { paymentMethod?: string; pointsAmount?: number } = {};
+    if (paymentMethod) {
+      body.paymentMethod = paymentMethod;
+    }
+    if (pointsAmount !== undefined) {
+      body.pointsAmount = pointsAmount;
+    }
+    await apiClient.post(`/events/${eventId}/join`, body, token);
   },
 
   leave: async (eventId: string): Promise<void> => {

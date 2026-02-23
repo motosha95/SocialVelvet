@@ -74,6 +74,11 @@ const cancelEventSchema = z.object({
   cancelSeries: z.boolean().optional().default(false),
 });
 
+const joinEventSchema = z.object({
+  paymentMethod: z.enum(['points', 'cash', 'credit_card']).optional(),
+  pointsAmount: z.number().positive().optional(),
+});
+
 // Get all events (public, but includes isJoined if authenticated). ?prioritizeFollowed=true puts events from followed hosts first.
 // Supports pagination: ?limit=10&offset=0 (default limit 10, offset 0). Returns array; when fewer than limit returned, no more pages.
 eventsRouter.get('/', optionalAuthenticate, async (req: AuthRequest, res, next) => {
@@ -167,14 +172,20 @@ eventsRouter.post('/:id/join', authenticate, async (req: AuthRequest, res, next)
       throw new AppError(401, 'Authentication required');
     }
 
-    await eventsService.joinEvent(req.params.id, req.userId);
+    const body = joinEventSchema.parse(req.body);
+    await eventsService.joinEvent(
+      req.params.id,
+      req.userId,
+      body.paymentMethod,
+      body.pointsAmount
+    );
     res.status(204).send();
   } catch (err) {
     if (err instanceof Error && err.message === 'Event not found') {
       next(new AppError(404, err.message));
       return;
     }
-    if (err instanceof Error && err.message === 'Event is full') {
+    if (err instanceof Error && (err.message === 'Event is full' || err.message.includes('payment') || err.message.includes('points'))) {
       next(new AppError(400, err.message));
       return;
     }

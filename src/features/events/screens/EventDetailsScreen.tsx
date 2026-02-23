@@ -28,6 +28,8 @@ import { getSeriesLabel } from '../utils/seriesUtils';
 import { calculatePointsForAttendance, getEffectivePriceForPoints, getDisplayPointsForUser } from '../utils/pointsUtils';
 import { useUserStore } from '../../../store/user/userStore';
 import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
+import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
+import type { PaymentMethod } from '../types/payment';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -64,6 +66,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [isFollowingHost, setIsFollowingHost] = React.useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = React.useState<boolean>(false);
   const [isCancelling, setIsCancelling] = React.useState<boolean>(false);
+  const [paymentModalVisible, setPaymentModalVisible] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
   const updateEvent = useEventsStore((s) => s.updateEvent);
   const removeEvent = useEventsStore((s) => s.removeEvent);
@@ -465,7 +468,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
   }, [events, eventId, event, isJoining, isLeaving]);
 
-  const handleJoin = async (): Promise<void> => {
+  const handleJoin = async (paymentMethod?: PaymentMethod, pointsAmount?: number): Promise<void> => {
     setIsJoining(true);
     setError(null);
 
@@ -486,7 +489,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
 
     try {
-      await joinEvent(eventId);
+      await joinEvent(eventId, paymentMethod, pointsAmount);
       // Wait a bit for backend to process, then refresh event data
       // This prevents getting stale data from the backend
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1048,7 +1051,16 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                 />
               </View>
             ) : (
-              <Button label={isJoining ? 'Joining...' : 'Join event'} onPress={handleJoin} />
+              <Button
+                label={isJoining ? 'Joining...' : 'Join event'}
+                onPress={() => {
+                  if (event.isPaid) {
+                    setPaymentModalVisible(true);
+                  } else {
+                    void handleJoin();
+                  }
+                }}
+              />
             )
           )}
         </View>
@@ -1451,6 +1463,43 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                     setAdmissionCelebrationVisible(false);
                     setAdmissionCelebrationPoints(null);
                   }}
+                />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+        )}
+
+        {/* Payment Method Selection Modal */}
+        {event && event.isPaid && (
+          <Modal
+            visible={paymentModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setPaymentModalVisible(false)}
+          >
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.6)',
+                justifyContent: 'center',
+                alignItems: 'center',
+                padding: theme.spacing.lg,
+              }}
+              activeOpacity={1}
+              onPress={() => setPaymentModalVisible(false)}
+            >
+              <TouchableOpacity
+                activeOpacity={1}
+                onPress={(e) => e.stopPropagation()}
+              >
+                <PaymentMethodSelector
+                  event={event}
+                  availablePoints={profile?.points || 0}
+                  onConfirm={async (method, pointsAmount) => {
+                    setPaymentModalVisible(false);
+                    await handleJoin(method, pointsAmount);
+                  }}
+                  onCancel={() => setPaymentModalVisible(false)}
                 />
               </TouchableOpacity>
             </TouchableOpacity>

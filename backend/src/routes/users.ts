@@ -19,6 +19,11 @@ const updateSubscriptionSchema = z.object({
   tier: z.enum(['vip', 'vip_plus']).nullable(),
 });
 
+const pushTokenSchema = z.object({
+  token: z.string().min(1, 'token is required'),
+  deviceId: z.string().optional(),
+});
+
 // Get current user profile (syncs points from admitted events if out of date)
 usersRouter.get('/me', authenticate, async (req: AuthRequest, res, next) => {
   try {
@@ -166,6 +171,39 @@ usersRouter.get('/me/challenges', authenticate, async (req: AuthRequest, res, ne
     res.json(result);
   } catch (err) {
     next(err);
+  }
+});
+
+// Register Expo push token for the current user (call after login)
+usersRouter.post('/me/push-token', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+    const body = pushTokenSchema.parse(req.body);
+    await prisma.pushToken.upsert({
+      where: {
+        userId_token: {
+          userId: req.userId,
+          token: body.token,
+        },
+      },
+      create: {
+        userId: req.userId,
+        token: body.token,
+        deviceId: body.deviceId ?? null,
+      },
+      update: body.deviceId != null ? { deviceId: body.deviceId } : {},
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      const msg = err.errors.map((e) => e.message).join('; ');
+      return res.status(400).json({ error: { message: msg, statusCode: 400 } });
+    }
+    if (err instanceof AppError) throw err;
+    console.error('[push-token] Registration failed:', err);
+    res.json({ ok: false });
   }
 });
 

@@ -32,6 +32,7 @@ model User {
   following       Follow[]               @relation("UserFollowing")   // Users this user follows
   followers       Follow[]               @relation("UserFollowers")   // Users who follow this user
   challengeProgress UserChallenge[]
+  pushTokens       PushToken[]
 
   @@map("users")
 }
@@ -136,11 +137,15 @@ model EventCoHost {
 }
 
 model EventAttendee {
-  id        String   @id @default(uuid())
-  userId    String
-  eventId   String
-  joinedAt  DateTime @default(now())
-  admittedAt DateTime? // When ticket was scanned/admitted
+  id            String   @id @default(uuid())
+  userId        String
+  eventId       String
+  joinedAt      DateTime @default(now())
+  admittedAt    DateTime? // When ticket was scanned/admitted
+  paymentMethod String?   // 'points' | 'cash' | 'credit_card'
+  pointsUsed    Int?      // Points deducted for this payment
+  cashPrice     Float?    // Final price if cash payment (includes markup)
+  creditCardPrice Float?  // Final price if credit card payment
 
   // Relations
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -207,4 +212,18 @@ model Message {
   sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
 
   @@map("messages")
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   // Expo push token, e.g. "ExponentPushToken[xxx]"
+  deviceId  String?   // optional: identify device for replace-old-token logic
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@map("push_tokens")
 }

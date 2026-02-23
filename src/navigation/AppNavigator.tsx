@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useTheme } from '../theme/useTheme';
 import { useAuthStore } from '../store/auth/authStore';
+import { registerPushTokenWithBackend } from '../services/pushNotifications';
 import type { RootStackParamList } from './types';
 import { AuthNavigator } from './AuthNavigator';
 import { MainTabs } from './MainTabs';
@@ -13,6 +14,13 @@ const RootStack = createNativeStackNavigator<RootStackParamList>();
 export const AppNavigator = (): React.JSX.Element => {
   const theme = useTheme();
   const session = useAuthStore((s) => s.session);
+  const hasHydrated = useAuthStore((s) => s.hasHydrated);
+
+  // Register push token with backend when user is logged in
+  React.useEffect(() => {
+    if (!hasHydrated || !session?.accessToken) return;
+    registerPushTokenWithBackend(session.accessToken);
+  }, [hasHydrated, session?.accessToken]);
 
   const navTheme = React.useMemo<NavTheme>(() => {
     return {

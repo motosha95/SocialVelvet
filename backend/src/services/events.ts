@@ -489,9 +489,14 @@ export const eventsService = {
   },
 
   /**
-   * Join event
+   * Join event with payment method support
    */
-  joinEvent: async (eventId: string, userId: string): Promise<void> => {
+  joinEvent: async (
+    eventId: string,
+    userId: string,
+    paymentMethod?: 'points' | 'cash' | 'credit_card',
+    pointsAmount?: number
+  ): Promise<void> => {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
       include: {
@@ -524,18 +529,118 @@ export const eventsService = {
       throw new Error('Event is full');
     }
 
+    // Payment processing for paid events
+    let paymentData: {
+      paymentMethod?: string;
+      pointsUsed?: number;
+      cashPrice?: number;
+      creditCardPrice?: number;
+    } = {};
+
+    if (event.isPaid) {
+      // Get event price (handle pricing tiers - use first tier for now)
+      const basePrice = event.pricingTiers && Array.isArray(event.pricingTiers) && (event.pricingTiers as Array<{ name: string; price: number }>).length > 0
+        ? (event.pricingTiers as Array<{ name: string; price: number }>)[0].price
+        : (event.price != null ? Number(event.price) : 0);
+
+      if (basePrice <= 0) {
+        throw new Error('Invalid event price');
+      }
+
+      // Get user's current points balance
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { points: true },
+      });
+
+      const userPoints = user?.points || 0;
+
+      // Determine payment method (default to credit_card if not specified)
+      const method = paymentMethod || 'credit_card';
+
+      if (method === 'points') {
+        // Points payment
+        const pointsToUse = pointsAmount || basePrice;
+        
+        if (pointsToUse > userPoints) {
+          throw new Error(`Insufficient points. You have ${userPoints} points but need ${pointsToUse}.`);
+        }
+
+        if (pointsToUse > basePrice) {
+          throw new Error(`Cannot use more points than the event price (${basePrice}).`);
+        }
+
+        // Deduct points
+        await prisma.user.update({
+          where: { id: userId },
+          data: { points: { decrement: pointsToUse } },
+        });
+
+        paymentData.paymentMethod = 'points';
+        paymentData.pointsUsed = pointsToUse;
+
+        // If partial payment, remaining is charged to credit card
+        const remaining = basePrice - pointsToUse;
+        if (remaining > 0) {
+          paymentData.creditCardPrice = remaining;
+          // In a real app, you would integrate with a payment gateway here
+          // For now, we just record the amount
+        }
+      } else if (method === 'cash') {
+        // Cash payment: 10-15% markup (using 12.5%), rounded up to nearest multiple of 5
+        const withMarkup = basePrice * 1.125;
+        const cashPrice = withMarkup <= 0 ? 0 : Math.ceil(withMarkup / 5) * 5;
+        paymentData.paymentMethod = 'cash';
+        paymentData.cashPrice = cashPrice;
+      } else {
+        // Credit card payment (base price)
+        paymentData.paymentMethod = 'credit_card';
+        paymentData.creditCardPrice = basePrice;
+        // In a real app, you would integrate with a payment gateway here
+        // For now, we just record the amount
+      }
+    }
+
+    // Create attendee record with payment data
     await prisma.eventAttendee.create({
       data: {
         userId,
         eventId,
+        paymentMethod: paymentData.paymentMethod,
+        pointsUsed: paymentData.pointsUsed,
+        cashPrice: paymentData.cashPrice,
+        creditCardPrice: paymentData.creditCardPrice,
       },
     });
   },
 
   /**
-   * Leave event
+   * Leave event: refund user as points (points used + any card/cash amount converted to points at 1:1)
    */
   leaveEvent: async (eventId: string, userId: string): Promise<void> => {
+    const attendee = await prisma.eventAttendee.findUnique({
+      where: {
+        userId_eventId: {
+          userId,
+          eventId,
+        },
+      },
+    });
+
+    // Refund as points: points they used + card/cash amounts (1 AED = 1 point for refund)
+    if (attendee) {
+      const pointsRefund =
+        (attendee.pointsUsed ?? 0) +
+        Math.floor(attendee.creditCardPrice ?? 0) +
+        Math.floor(attendee.cashPrice ?? 0);
+      if (pointsRefund > 0) {
+        await prisma.user.update({
+          where: { id: userId },
+          data: { points: { increment: pointsRefund } },
+        });
+      }
+    }
+
     await prisma.eventAttendee.deleteMany({
       where: {
         eventId,

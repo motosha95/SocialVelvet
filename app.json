@@ -11,7 +11,9 @@
       "backgroundColor": "#0B0F14"
     },
     "icon": "./src/assets/logo.png",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -29,7 +31,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "usesCleartextTraffic": true
     },
@@ -40,7 +43,14 @@
           "photosPermission": "The app needs access to your photos to upload images.",
           "cameraPermission": "The app needs access to your camera to take photos."
         }
-      ]
-    ]
+      ],
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "21225c5b-495e-49b0-934a-3d787f109098"
+      }
+    },
+    "owner": "tosha95s-organization"
   }
 }

@@ -275,6 +275,9 @@ export const ChallengesScreen = (_props: Props): React.JSX.Element => {
             </View>
           </View>
 
+          <AppText color="muted" style={{ fontSize: 11, marginBottom: 6, textAlign: 'center' }}>
+            Your level
+          </AppText>
           <View style={[styles.levelBadge, { backgroundColor: level.color + '25', borderColor: level.color + '50', borderWidth: 1 }]}>
             <AppText style={{ fontSize: 20, marginRight: 6 }}>{level.icon}</AppText>
             <AppText style={{ fontWeight: '700', fontSize: 14, color: level.color }}>{level.name}</AppText>
@@ -314,10 +317,10 @@ export const ChallengesScreen = (_props: Props): React.JSX.Element => {
             <AppText style={{ fontSize: 28, marginRight: theme.spacing.md }}>🎯</AppText>
             <View style={{ flex: 1 }}>
               <AppText style={{ fontWeight: '600', fontSize: 14 }}>
-                {eventsToNext === 1 ? 'One more event!' : `${eventsToNext} events to go`}
+                {nextChallenge.name}
               </AppText>
               <AppText color="muted" style={{ fontSize: 12, marginTop: 2 }}>
-                Complete "{nextChallenge.name}" for +{nextChallenge.rewardPoints} bonus points
+                {eventsToNext === 1 ? 'One more event!' : `${eventsToNext} events to go`} — +{nextChallenge.rewardPoints} pts
               </AppText>
             </View>
           </View>

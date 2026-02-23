@@ -98,6 +98,7 @@ export const MainTabs = (): React.JSX.Element => {
 
   return (
     <Tabs.Navigator
+      initialRouteName={Routes.App.Events}
       screenOptions={({ route }) => ({
         tabBarIcon: ({ focused }) => {
           const icon = getTabIcon(route.name);
@@ -123,9 +124,9 @@ export const MainTabs = (): React.JSX.Element => {
       })}
     >
       <Tabs.Screen 
-        name={Routes.App.Events} 
-        component={EventsStack} 
-        options={{ title: 'Events' }} 
+        name={Routes.App.Chat} 
+        component={ChatStack} 
+        options={{ title: 'Chat' }} 
       />
       <Tabs.Screen 
         name={Routes.App.Bookings} 
@@ -133,9 +134,9 @@ export const MainTabs = (): React.JSX.Element => {
         options={{ title: 'My Bookings' }} 
       />
       <Tabs.Screen 
-        name={Routes.App.Chat} 
-        component={ChatStack} 
-        options={{ title: 'Chat' }} 
+        name={Routes.App.Events} 
+        component={EventsStack} 
+        options={{ title: 'Events' }} 
       />
       <Tabs.Screen 
         name={Routes.App.Challenges} 

@@ -1,5 +1,6 @@
 import { prisma } from '../db/client';
 import type { Conversation, Message } from '../types';
+import { sendPushToUser } from './pushNotifications';
 
 export const chatService = {
   async getUserConversations(userId: string) {
@@ -201,6 +202,23 @@ export const chatService = {
       where: { id: data.conversationId },
       data: { updatedAt: new Date() },
     });
+
+    // Notify other participants
+    const otherParticipants = await prisma.conversationParticipant.findMany({
+      where: {
+        conversationId: data.conversationId,
+        userId: { not: data.senderId },
+      },
+      select: { userId: true },
+    });
+    const contentPreview = data.content.length > 80 ? data.content.slice(0, 77) + '...' : data.content;
+    for (const p of otherParticipants) {
+      sendPushToUser(p.userId, {
+        title: message.sender.name,
+        body: contentPreview,
+        data: { conversationId: data.conversationId, messageId: message.id },
+      }).catch((err) => console.warn('[chat] Push to user failed:', p.userId, err));
+    }
 
     return {
       id: message.id,
