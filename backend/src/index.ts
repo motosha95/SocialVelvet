@@ -9,6 +9,7 @@ import { eventsRouter } from './routes/events';
 import { uploadRouter } from './routes/upload';
 import { chatRouter } from './routes/chat';
 import { usersRouter } from './routes/users';
+import { startEventReminderScheduler } from './services/eventReminders';
 
 dotenv.config();
 
@@ -44,4 +45,5 @@ app.use(errorHandler);
 app.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
   console.log(`📡 Environment: ${process.env.NODE_ENV || 'development'}`);
+  startEventReminderScheduler();
 });

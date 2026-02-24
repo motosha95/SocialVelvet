@@ -227,3 +227,15 @@ model PushToken {
   @@index([userId])
   @@map("push_tokens")
 }
+
+model EventReminderSent {
+  id           String   @id @default(uuid())
+  eventId      String
+  userId       String
+  reminderType String   // '1h' | '24h'
+  sentAt       DateTime @default(now())
+
+  @@unique([eventId, userId, reminderType])
+  @@index([eventId])
+  @@map("event_reminder_sent")
+}
