@@ -1,0 +1,241 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  password  String   // Hashed password
+  avatarUrl String?
+  bio       String?
+  points    Int      @default(0) // Gamification: earned by attending events (ticket scanned)
+  vipTier   String?  // null | 'vip' | 'vip_plus' - doubles points, early access, discounts
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizedEvents Event[]                @relation("EventOrganizer")
+  eventAttendees  EventAttendee[]
+  coHostedEvents EventCoHost[]          @relation("EventCoHost")
+  sentMessages    Message[]              @relation("MessageSender")
+  conversations   ConversationParticipant[]
+  tickets         Ticket[]               @relation("TicketOwner")
+  following       Follow[]               @relation("UserFollowing")   // Users this user follows
+  followers       Follow[]               @relation("UserFollowers")   // Users who follow this user
+  challengeProgress UserChallenge[]
+  pushTokens       PushToken[]
+
+  @@map("users")
+}
+
+model Challenge {
+  id           String   @id @default(uuid())
+  name         String
+  description  String
+  type         String   // e.g. "ATTEND_EVENTS"
+  targetCount  Int
+  rewardPoints Int
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userProgress UserChallenge[]
+
+  @@map("challenges")
+}
+
+model UserChallenge {
+  id           String    @id @default(uuid())
+  userId       String
+  challengeId  String
+  currentCount Int       @default(0)
+  isCompleted  Boolean   @default(false)
+  completedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+  @@index([userId])
+  @@index([challengeId])
+  @@map("user_challenges")
+}
+
+model Follow {
+  id          String   @id @default(uuid())
+  followerId  String   // User who follows
+  followingId String   // User being followed
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("UserFollowing", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("UserFollowers", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+  @@map("follows")
+}
+
+model Event {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  location     String
+  date         DateTime
+  imageUrl     String?
+  maxAttendees Int?
+  isTicketed   Boolean  @default(true) // All events have tickets
+  isPaid       Boolean  @default(false) // Whether this is a paid event (vs free)
+  price        Float?   // Single price (when no tiers); legacy / fallback
+  pricingTiers Json?   // Optional: [{ name: string, price: number }], max 4 tiers
+  currency     String   @default("AED") // Currency code
+  topics       String[] @default([])   // Up to 3 topics from predefined list
+  seriesId       String?   // ID linking events in a series (UUID of first event)
+  seriesInterval String?   // '1week' | '2weeks' | '3weeks' | '1month'
+  seriesIndex    Int?      // Index of this event in the series (0-based)
+  isCancelled    Boolean   @default(false)
+  listFrom       DateTime? // Early access: event visible to all only after this date; VIPs see before
+  vipOnly        Boolean   @default(false) // Only VIP Plus can see and join
+  isCuratedPick  Boolean   @default(false) // Featured in weekly VIP picks
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  // Relations
+  organizerId String
+  organizer   User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  attendees   EventAttendee[]
+  coHosts     EventCoHost[]
+  tickets     Ticket[]
+
+  @@map("events")
+}
+
+model EventCoHost {
+  id        String   @id @default(uuid())
+  eventId   String
+  userId    String
+  canEdit   Boolean  @default(true) // Permission to edit event
+  createdAt DateTime @default(now())
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation("EventCoHost", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@map("event_co_hosts")
+}
+
+model EventAttendee {
+  id            String   @id @default(uuid())
+  userId        String
+  eventId       String
+  joinedAt      DateTime @default(now())
+  admittedAt    DateTime? // When ticket was scanned/admitted
+  paymentMethod String?   // 'points' | 'cash' | 'credit_card'
+  pointsUsed    Int?      // Points deducted for this payment
+  cashPrice     Float?    // Final price if cash payment (includes markup)
+  creditCardPrice Float?  // Final price if credit card payment
+
+  // Relations
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  event Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@map("event_attendees")
+}
+
+model Ticket {
+  id           String   @id @default(uuid())
+  ticketNumber String   @unique // Unique ticket identifier
+  eventId      String
+  userId       String   // Owner of the ticket
+  scannedAt    DateTime? // When ticket was scanned
+  scannedBy    String?   // User ID who scanned the ticket (host/organizer)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation("TicketOwner", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId])
+  @@index([userId])
+  @@index([ticketNumber])
+  @@map("tickets")
+}
+
+model Conversation {
+  id        String   @id @default(uuid())
+  eventId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String   @id @default(uuid())
+  userId         String
+  conversationId String
+  joinedAt       DateTime @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, conversationId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User         @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+model PushToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   // Expo push token, e.g. "ExponentPushToken[xxx]"
+  deviceId  String?   // optional: identify device for replace-old-token logic
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, token])
+  @@index([userId])
+  @@map("push_tokens")
+}
+
+model EventReminderSent {
+  id           String   @id @default(uuid())
+  eventId      String
+  userId       String
+  reminderType String   // '1h' | '24h'
+  sentAt       DateTime @default(now())
+
+  @@unique([eventId, userId, reminderType])
+  @@index([eventId])
+  @@map("event_reminder_sent")
+}

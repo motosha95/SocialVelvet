@@ -1,0 +1,791 @@
+import React from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, TextInput, View, Image, TouchableOpacity, Platform, Switch, Modal, FlatList, Pressable } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+
+import { Screen } from '../../../components/layout/Screen';
+import { AppText } from '../../../components/ui/AppText';
+import { Button } from '../../../components/ui/Button';
+import { DatePicker } from '../../../components/ui/DatePicker';
+import { LocationPicker } from '../../../components/ui/LocationPicker';
+import { useTheme } from '../../../theme/useTheme';
+import { eventsApi } from '../../../api/eventsApi';
+import { uploadApi } from '../../../api/uploadApi';
+import { useEventsStore } from '../../../store/events/eventsStore';
+import type { EventsStackParamList, AppTabsParamList } from '../../../navigation/types';
+import { Routes } from '../../../navigation/routes';
+import type { SeriesInterval, PricingTier } from '../types';
+import { generateSeriesDates, MAX_SERIES_EVENTS } from '../utils/seriesUtils';
+import { EVENT_TOPICS, MAX_EVENT_TOPICS } from '../constants/topics';
+
+type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Create>, BottomTabScreenProps<AppTabsParamList>>;
+
+export const CreateEventScreen = ({ navigation, route }: Props): React.JSX.Element => {
+  const theme = useTheme();
+  const addEvent = useEventsStore((s) => s.addEvent);
+  const copyFromEventId = route.params?.copyFromEventId;
+
+  const [title, setTitle] = React.useState<string>('');
+  const [description, setDescription] = React.useState<string>('');
+  const [location, setLocation] = React.useState<string>('');
+  const [dateTime, setDateTime] = React.useState<Date>(() => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(18, 0, 0, 0);
+    return tomorrow;
+  });
+  const [maxAttendees, setMaxAttendees] = React.useState<string>('');
+  const [imageUri, setImageUri] = React.useState<string | null>(null);
+  const [seriesInterval, setSeriesInterval] = React.useState<SeriesInterval | null>(null);
+  const [seriesCount, setSeriesCount] = React.useState<number>(12);
+  const [topics, setTopics] = React.useState<string[]>([]);
+  const [topicsModalVisible, setTopicsModalVisible] = React.useState<boolean>(false);
+  const [isPaid, setIsPaid] = React.useState<boolean>(false);
+  const [usePricingTiers, setUsePricingTiers] = React.useState<boolean>(false);
+  const [price, setPrice] = React.useState<string>('');
+  const [pricingTiers, setPricingTiers] = React.useState<Array<{ name: string; price: string }>>([{ name: '', price: '' }]);
+  const MAX_TIERS = 4;
+  const CURRENCY = 'AED';
+  const [isSubmitting, setIsSubmitting] = React.useState<boolean>(false);
+  const [isUploadingImage, setIsUploadingImage] = React.useState<boolean>(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [isLoadingCopy, setIsLoadingCopy] = React.useState<boolean>(!!copyFromEventId);
+
+  React.useEffect(() => {
+    if (!copyFromEventId) return;
+    let cancelled = false;
+    eventsApi.getById(copyFromEventId).then((ev) => {
+      if (cancelled || !ev) {
+        setIsLoadingCopy(false);
+        return;
+      }
+      setTitle(ev.title);
+      setDescription(ev.description);
+      setLocation(ev.location);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(18, 0, 0, 0);
+      setDateTime(tomorrow);
+      setMaxAttendees(ev.maxAttendees != null ? String(ev.maxAttendees) : '');
+      setImageUri(ev.imageUrl || null);
+      setSeriesInterval(ev.seriesInterval || null);
+      setTopics(ev.topics || []);
+      setIsPaid(ev.isPaid ?? false);
+      if (ev.isPaid && ev.pricingTiers && ev.pricingTiers.length > 0) {
+        setUsePricingTiers(true);
+        setPricingTiers(
+          ev.pricingTiers.map((t) => ({ name: t.name, price: String(t.price) }))
+        );
+        setPrice('');
+      } else {
+        setUsePricingTiers(false);
+        setPrice(ev.price != null ? String(ev.price) : '');
+        setPricingTiers([{ name: '', price: '' }]);
+      }
+      setIsLoadingCopy(false);
+    }).catch(() => {
+      if (!cancelled) {
+        setError('Failed to load event to copy');
+        setIsLoadingCopy(false);
+      }
+    });
+    return () => { cancelled = true; };
+  }, [copyFromEventId]);
+
+  const toggleTopic = (topic: string): void => {
+    setTopics((prev) => {
+      if (prev.includes(topic)) return prev.filter((t) => t !== topic);
+      if (prev.length >= MAX_EVENT_TOPICS) return prev;
+      return [...prev, topic];
+    });
+  };
+
+  const styles = React.useMemo(() => {
+    return StyleSheet.create({
+      container: {
+        paddingBottom: theme.spacing.xl,
+      },
+      header: {
+        marginBottom: theme.spacing.md,
+      },
+      card: {
+        backgroundColor: theme.colors.surface,
+        borderColor: theme.colors.border,
+        borderWidth: 1,
+        borderRadius: 16,
+        padding: theme.spacing.md,
+        marginBottom: theme.spacing.md,
+      },
+      fieldLabel: {
+        marginTop: theme.spacing.sm,
+        marginBottom: theme.spacing.xs,
+      },
+      input: {
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 12,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        color: theme.colors.text,
+        backgroundColor: theme.colors.background,
+      },
+      textArea: {
+        minHeight: 150,
+        textAlignVertical: 'top',
+      },
+      row: {
+        flexDirection: 'row',
+        gap: theme.spacing.sm,
+      },
+      rowItem: {
+        flex: 1,
+      },
+      cta: {
+        marginTop: theme.spacing.md,
+        opacity: isSubmitting ? 0.6 : 1,
+      },
+      error: {
+        marginTop: theme.spacing.sm,
+        color: theme.colors.danger,
+      },
+      hint: {
+        marginTop: theme.spacing.xs / 2,
+        fontSize: theme.typography.captionSize,
+      },
+      imageContainer: {
+        marginTop: theme.spacing.sm,
+        marginBottom: theme.spacing.sm,
+      },
+      imagePreview: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        backgroundColor: theme.colors.border,
+        marginTop: theme.spacing.xs,
+      },
+      imagePlaceholder: {
+        width: '100%',
+        height: 200,
+        borderRadius: 12,
+        backgroundColor: theme.colors.border,
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginTop: theme.spacing.xs,
+      },
+      seriesContainer: {
+        marginTop: theme.spacing.sm,
+      },
+      seriesOptions: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.sm,
+        marginTop: theme.spacing.xs,
+      },
+      seriesOption: {
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        backgroundColor: theme.colors.background,
+      },
+      seriesOptionSelected: {
+        backgroundColor: theme.colors.primary,
+        borderColor: theme.colors.primary,
+      },
+      seriesOptionText: {
+        color: theme.colors.text,
+        fontSize: theme.typography.bodySize,
+      },
+      seriesOptionTextSelected: {
+        color: theme.mode === 'dark' ? '#0B0F14' : '#FFFFFF',
+        fontWeight: '600',
+      },
+      topicsTrigger: {
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 12,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        backgroundColor: theme.colors.background,
+        minHeight: 44,
+        justifyContent: 'center',
+      },
+      topicsChips: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: theme.spacing.xs,
+        marginTop: theme.spacing.xs,
+      },
+      topicChip: {
+        backgroundColor: theme.colors.primary + '30',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: theme.spacing.xs / 2,
+        borderRadius: 12,
+      },
+      topicChipText: {
+        color: theme.colors.primary,
+        fontSize: theme.typography.captionSize,
+        fontWeight: '600',
+      },
+      modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        padding: theme.spacing.lg,
+      },
+      modalContent: {
+        backgroundColor: theme.colors.surface,
+        borderRadius: 16,
+        maxHeight: 400,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+      },
+      modalTitle: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      modalItem: {
+        padding: theme.spacing.md,
+        borderBottomWidth: 1,
+        borderBottomColor: theme.colors.border,
+      },
+      modalItemSelected: {
+        backgroundColor: theme.colors.primary + '20',
+      },
+    });
+  }, [isSubmitting, seriesInterval, theme]);
+
+  const validateForm = (): boolean => {
+    if (!title.trim()) {
+      setError('Title is required');
+      return false;
+    }
+    if (!description.trim()) {
+      setError('Description is required');
+      return false;
+    }
+    if (!location.trim()) {
+      setError('Location is required');
+      return false;
+    }
+
+    // Validate date is not in the past
+    if (dateTime < new Date()) {
+      setError('Event date and time must be in the future');
+      return false;
+    }
+
+    // Validate max attendees if provided
+    if (maxAttendees.trim()) {
+      const max = parseInt(maxAttendees.trim(), 10);
+      if (isNaN(max) || max < 1) {
+        setError('Max attendees must be a positive number');
+        return false;
+      }
+    }
+
+    // Paid events: require either single price or at least one valid tier
+    if (isPaid) {
+      if (usePricingTiers) {
+        const validTiers = pricingTiers.filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0);
+        if (validTiers.length === 0) {
+          setError('Add at least one pricing tier with a name and valid price');
+          return false;
+        }
+      } else {
+        const priceNum = parseFloat(price.trim());
+        if (!price.trim() || isNaN(priceNum) || priceNum <= 0) {
+          setError('Please enter a valid price for the paid event');
+          return false;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  const handlePickImage = async () => {
+    try {
+      // Request permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      
+      if (permissionResult.granted === false) {
+        alert('Permission to access camera roll is required!');
+        return;
+      }
+
+      // Show instructions before opening picker
+      alert('📸 Image Selection Instructions:\n\n1. Select an image from your gallery\n2. Adjust the crop area by dragging the corners\n3. To confirm: Look for the checkmark (✓) or "Done" button in the TOP-RIGHT corner of the screen\n4. If you don\'t see it, try tapping the top-right area - it may be partially hidden but still works');
+
+      // Launch image picker with native editing
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
+        aspect: [16, 9], // 16:9 aspect ratio for event images
+        quality: 0.8,
+      });
+
+      if (result.canceled) {
+        return; // User canceled
+      }
+
+      if (!result.assets || result.assets.length === 0) {
+        alert('No image selected');
+        return;
+      }
+
+      // Upload the cropped image
+      setIsUploadingImage(true);
+      try {
+        const uploadResult = await uploadApi.uploadImage(result.assets[0].uri);
+        setImageUri(uploadResult.imageUrl);
+      } catch (err) {
+        console.error('Upload error:', err);
+        alert('Failed to upload image. Please try again.');
+      } finally {
+        setIsUploadingImage(false);
+      }
+    } catch (error) {
+      console.error('Image picker error:', error);
+      alert('Failed to open image picker. Please check app permissions.');
+    }
+  };
+
+  const onSubmit = async (): Promise<void> => {
+    setError(null);
+
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const baseRequest: { 
+        title: string;
+        description: string;
+        location: string;
+        date: string;
+        maxAttendees?: number;
+        imageUrl?: string;
+        isPaid?: boolean;
+        price?: number;
+        pricingTiers?: PricingTier[];
+        currency?: string;
+        topics?: string[];
+        seriesInterval?: SeriesInterval;
+        seriesCount?: number;
+      } = {
+        title: title.trim(),
+        description: description.trim(),
+        location: location.trim(),
+        date: dateTime.toISOString(),
+      };
+
+      if (maxAttendees.trim()) {
+        baseRequest.maxAttendees = parseInt(maxAttendees.trim(), 10);
+      }
+
+      if (imageUri) {
+        baseRequest.imageUrl = imageUri;
+      }
+
+      if (isPaid) {
+        baseRequest.isPaid = true;
+        baseRequest.currency = CURRENCY;
+        if (usePricingTiers) {
+          baseRequest.pricingTiers = pricingTiers
+            .filter((t) => t.name.trim() && parseFloat(t.price.trim()) > 0)
+            .map((t) => ({ name: t.name.trim(), price: parseFloat(t.price.trim()) }));
+        } else {
+          baseRequest.price = parseFloat(price.trim());
+        }
+      }
+
+      if (topics.length > 0) {
+        baseRequest.topics = topics;
+      }
+
+      // If series is selected, add series info
+      if (seriesInterval) {
+        baseRequest.seriesInterval = seriesInterval;
+        baseRequest.seriesCount = Math.min(Math.max(1, seriesCount), MAX_SERIES_EVENTS);
+      }
+
+      const result = await eventsApi.create(baseRequest);
+
+      addEvent(result.event);
+      
+      // If series was created, the backend should handle creating all events
+      // For now, we'll just navigate back
+      // TODO: If backend doesn't support series, create events client-side
+      
+      navigation.goBack();
+    } catch (err) {
+      let errorMessage = 'Failed to create event. Please try again.';
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        // If it's an auth error, suggest logging out and back in
+        if (err.message.toLowerCase().includes('token') || err.message.toLowerCase().includes('auth')) {
+          errorMessage += ' Try logging out and logging back in.';
+        }
+      }
+      setError(errorMessage);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+
+
+  if (isLoadingCopy) {
+    return (
+      <Screen>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: theme.spacing.xl }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <AppText color="muted" style={{ marginTop: theme.spacing.md }}>Loading event to copy...</AppText>
+        </View>
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
+        <View style={styles.header}>
+          <AppText variant="title">{copyFromEventId ? 'Copy Event' : 'Create Event'}</AppText>
+          <AppText color="muted">
+            {copyFromEventId ? 'Create a new event based on this one.' : 'Share an event with the community.'}
+          </AppText>
+        </View>
+
+        <View style={styles.card}>
+          <AppText style={styles.fieldLabel} color="muted">
+            Title *
+          </AppText>
+          <TextInput
+            value={title}
+            onChangeText={setTitle}
+            style={styles.input}
+            placeholder="Tech Meetup: React Native"
+            placeholderTextColor={theme.colors.mutedText}
+            editable={!isSubmitting}
+            maxLength={100}
+          />
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Description *
+          </AppText>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            style={[styles.input, styles.textArea]}
+            placeholder="Describe your event..."
+            placeholderTextColor={theme.colors.mutedText}
+            multiline
+            numberOfLines={6}
+            editable={!isSubmitting}
+            maxLength={1000}
+          />
+
+          <LocationPicker
+            value={location}
+            onChange={setLocation}
+            label="Location *"
+            placeholder="123 Main St, City"
+          />
+
+          <DatePicker
+            value={dateTime}
+            onChange={setDateTime}
+            mode="datetime"
+            minimumDate={new Date()}
+            label="Date & Time *"
+          />
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Repeat Event (optional)
+          </AppText>
+          <AppText color="muted" style={styles.hint}>
+            Choose how often to repeat (max {MAX_SERIES_EVENTS} events)
+          </AppText>
+          <View style={styles.seriesOptions}>
+            {(['1week', '2weeks', '3weeks', '1month'] as SeriesInterval[]).map((interval) => (
+              <TouchableOpacity
+                key={interval}
+                style={[
+                  styles.seriesOption,
+                  seriesInterval === interval && styles.seriesOptionSelected,
+                ]}
+                onPress={() => setSeriesInterval(seriesInterval === interval ? null : interval)}
+                disabled={isSubmitting}
+              >
+                <AppText
+                  style={[
+                    styles.seriesOptionText,
+                    seriesInterval === interval && styles.seriesOptionTextSelected,
+                  ]}
+                >
+                  {interval === '1week' ? 'Weekly' :
+                   interval === '2weeks' ? 'Bi-weekly' :
+                   interval === '3weeks' ? 'Every 3 weeks' :
+                   'Monthly'}
+                </AppText>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {seriesInterval && (
+            <>
+              <AppText style={[styles.fieldLabel, { marginTop: theme.spacing.md }]} color="muted">
+                How many times?
+              </AppText>
+              <View style={styles.seriesOptions}>
+                {[2, 4, 6, 8, 10, 12].map((n) => (
+                  <TouchableOpacity
+                    key={n}
+                    style={[
+                      styles.seriesOption,
+                      seriesCount === n && styles.seriesOptionSelected,
+                    ]}
+                    onPress={() => setSeriesCount(n)}
+                    disabled={isSubmitting}
+                  >
+                    <AppText
+                      style={[
+                        styles.seriesOptionText,
+                        seriesCount === n && styles.seriesOptionTextSelected,
+                      ]}
+                    >
+                      {n} events
+                    </AppText>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <AppText color="muted" style={styles.hint}>
+                This will create {seriesCount} recurring events
+              </AppText>
+            </>
+          )}
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Topics (optional, up to {MAX_EVENT_TOPICS})
+          </AppText>
+          <TouchableOpacity
+            style={styles.topicsTrigger}
+            onPress={() => setTopicsModalVisible(true)}
+            disabled={isSubmitting}
+          >
+            <AppText color="muted">
+              {topics.length === 0
+                ? 'Tap to select topics...'
+                : `${topics.length} topic${topics.length === 1 ? '' : 's'} selected`}
+            </AppText>
+            {topics.length > 0 && (
+              <View style={styles.topicsChips}>
+                {topics.map((t) => (
+                  <View key={t} style={styles.topicChip}>
+                    <AppText style={styles.topicChipText}>{t}</AppText>
+                  </View>
+                ))}
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <Modal
+            visible={topicsModalVisible}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setTopicsModalVisible(false)}
+          >
+            <Pressable style={styles.modalOverlay} onPress={() => setTopicsModalVisible(false)}>
+              <Pressable style={styles.modalContent} onPress={(e) => e.stopPropagation()}>
+                <View style={styles.modalTitle}>
+                  <AppText variant="title">Select topics (max {MAX_EVENT_TOPICS})</AppText>
+                </View>
+                <FlatList
+                  data={[...EVENT_TOPICS]}
+                  keyExtractor={(item) => item}
+                  renderItem={({ item }) => {
+                    const selected = topics.includes(item);
+                    const disabled = !selected && topics.length >= MAX_EVENT_TOPICS;
+                    return (
+                      <TouchableOpacity
+                        style={[styles.modalItem, selected && styles.modalItemSelected]}
+                        onPress={() => !disabled && toggleTopic(item)}
+                        disabled={disabled}
+                      >
+                        <AppText>{item}{selected ? ' ✓' : ''}</AppText>
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+                <View style={{ padding: theme.spacing.md }}>
+                  <Button label="Done" onPress={() => setTopicsModalVisible(false)} />
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Event Image (optional)
+          </AppText>
+          <TouchableOpacity onPress={handlePickImage} disabled={isUploadingImage || isSubmitting}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.imagePreview} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <AppText color="muted">Tap to add image</AppText>
+              </View>
+            )}
+          </TouchableOpacity>
+          {isUploadingImage && (
+            <AppText color="muted" style={styles.hint}>
+              Uploading image...
+            </AppText>
+          )}
+
+          <AppText style={styles.fieldLabel} color="muted">
+            Max Attendees (optional)
+          </AppText>
+          <TextInput
+            value={maxAttendees}
+            onChangeText={setMaxAttendees}
+            style={styles.input}
+            placeholder="50"
+            placeholderTextColor={theme.colors.mutedText}
+            keyboardType="numeric"
+            editable={!isSubmitting}
+          />
+          <AppText color="muted" style={styles.hint}>
+            Leave empty for unlimited attendees
+          </AppText>
+
+          <View style={[styles.row, { marginTop: theme.spacing.md, alignItems: 'center', justifyContent: 'space-between' }]}>
+            <View style={{ flex: 1 }}>
+              <AppText style={styles.fieldLabel} color="muted">
+                Paid Event
+              </AppText>
+              <AppText color="muted" style={styles.hint}>
+                {isPaid ? 'This event requires payment to attend' : 'Free event - no payment required'}
+              </AppText>
+            </View>
+            <Switch
+              value={isPaid}
+              onValueChange={setIsPaid}
+              disabled={isSubmitting}
+              trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+              thumbColor={theme.mode === 'dark' ? '#FFFFFF' : '#FFFFFF'}
+            />
+          </View>
+
+          {isPaid && (
+            <>
+              <View style={[styles.row, { alignItems: 'center', marginBottom: theme.spacing.sm }]}>
+                <TouchableOpacity
+                  style={[styles.seriesOption, !usePricingTiers && styles.seriesOptionSelected]}
+                  onPress={() => setUsePricingTiers(false)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={[styles.seriesOptionText, !usePricingTiers && styles.seriesOptionTextSelected]}>Single price</AppText>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.seriesOption, usePricingTiers && styles.seriesOptionSelected]}
+                  onPress={() => setUsePricingTiers(true)}
+                  disabled={isSubmitting}
+                >
+                  <AppText style={[styles.seriesOptionText, usePricingTiers && styles.seriesOptionTextSelected]}>Pricing tiers (up to {MAX_TIERS})</AppText>
+                </TouchableOpacity>
+              </View>
+              {!usePricingTiers ? (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Price ({CURRENCY}) *
+                  </AppText>
+                  <TextInput
+                    value={price}
+                    onChangeText={setPrice}
+                    style={styles.input}
+                    placeholder="0.00"
+                    placeholderTextColor={theme.colors.mutedText}
+                    keyboardType="decimal-pad"
+                    editable={!isSubmitting}
+                  />
+                </>
+              ) : (
+                <>
+                  <AppText style={styles.fieldLabel} color="muted">
+                    Tier name & price ({CURRENCY}) *
+                  </AppText>
+                  {pricingTiers.map((tier, index) => (
+                    <View key={index} style={[styles.row, { marginBottom: theme.spacing.xs, alignItems: 'center', gap: theme.spacing.xs }]}>
+                      <TextInput
+                        value={tier.name}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], name: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { flex: 1 }]}
+                        placeholder="e.g. Guys, Girls, VIP"
+                        placeholderTextColor={theme.colors.mutedText}
+                        editable={!isSubmitting}
+                        maxLength={50}
+                      />
+                      <TextInput
+                        value={tier.price}
+                        onChangeText={(text) =>
+                          setPricingTiers((prev) => {
+                            const next = [...prev];
+                            next[index] = { ...next[index], price: text };
+                            return next;
+                          })
+                        }
+                        style={[styles.input, { width: 80 }]}
+                        placeholder="0"
+                        placeholderTextColor={theme.colors.mutedText}
+                        keyboardType="decimal-pad"
+                        editable={!isSubmitting}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setPricingTiers((prev) => prev.filter((_, i) => i !== index))}
+                        disabled={isSubmitting || pricingTiers.length <= 1}
+                        style={{ padding: theme.spacing.xs }}
+                      >
+                        <AppText style={{ color: theme.colors.danger, fontSize: 18 }}>×</AppText>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {pricingTiers.length < MAX_TIERS && (
+                    <TouchableOpacity
+                      onPress={() => setPricingTiers((prev) => [...prev, { name: '', price: '' }])}
+                      disabled={isSubmitting}
+                      style={{ marginTop: theme.spacing.xs }}
+                    >
+                      <AppText style={{ color: theme.colors.primary, fontWeight: '600' }}>+ Add tier</AppText>
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </>
+          )}
+
+          <Button 
+            label={isSubmitting ? 'Creating...' : 'Create Event'} 
+            onPress={onSubmit} 
+            style={styles.cta}
+            disabled={isSubmitting || isUploadingImage}
+          />
+
+          {error ? <AppText style={styles.error}>{error}</AppText> : null}
+        </View>
+      </ScrollView>
+
+    </Screen>
+  );
+};
+

@@ -1,0 +1,266 @@
+import React from 'react';
+import { ScrollView, StyleSheet, View, Alert } from 'react-native';
+import { Screen } from '../../../components/layout/Screen';
+import { AppText } from '../../../components/ui/AppText';
+import { Button } from '../../../components/ui/Button';
+import { useTheme } from '../../../theme/useTheme';
+import { useUserStore } from '../../../store/user/userStore';
+
+type TierFeature = { icon: string; text: string };
+
+const VIP_TIERS = [
+  {
+    id: 'vip',
+    name: 'VIP',
+    tagline: 'Great value to get more from events',
+    icon: '⭐',
+    accentColor: '#059669',
+    price: 29,
+    currency: 'AED',
+    period: 'month',
+    features: [
+      { icon: '⭐', text: 'Double points on every event' },
+      { icon: '📌', text: 'Curated events first in your feed' },
+      { icon: '👑', text: 'VIP badge on your profile' },
+      { icon: '💰', text: '10% off selected events' },
+      { icon: '📧', text: 'Weekly curated event picks' },
+    ] as TierFeature[],
+  },
+  {
+    id: 'vip-plus',
+    name: 'VIP Plus',
+    tagline: 'The full premium experience',
+    icon: '👑',
+    accentColor: '#D97706',
+    price: 49,
+    currency: 'AED',
+    period: 'month',
+    features: [
+      { icon: '⭐', text: 'Double points on every event' },
+      { icon: '📌', text: 'Curated events first in your feed' },
+      { icon: '👑', text: 'VIP badge on your profile' },
+      { icon: '💰', text: '20% off selected events' },
+      { icon: '✨', text: 'Exclusive VIP-only events' },
+      { icon: '💬', text: 'Priority support' },
+      { icon: '🎁', text: 'Birthday & surprise perks' },
+      { icon: '📧', text: 'Weekly curated event picks' },
+    ] as TierFeature[],
+  },
+];
+
+export const VIPSubscriptionScreen = (): React.JSX.Element => {
+  const theme = useTheme();
+
+  const styles = React.useMemo(() => {
+    return StyleSheet.create({
+      container: {
+        paddingBottom: theme.spacing.xl,
+      },
+      hero: {
+        alignItems: 'center',
+        paddingVertical: theme.spacing.xl,
+        paddingHorizontal: theme.spacing.lg,
+        marginBottom: theme.spacing.sm,
+      },
+      crown: {
+        fontSize: 48,
+        marginBottom: theme.spacing.sm,
+      },
+      heroTitle: {
+        fontSize: 24,
+        fontWeight: '700',
+        color: theme.colors.text,
+        textAlign: 'center',
+        marginBottom: theme.spacing.xs,
+      },
+      heroSubtitle: {
+        fontSize: 15,
+        color: theme.colors.mutedText,
+        textAlign: 'center',
+        lineHeight: 22,
+      },
+      sectionLabel: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.colors.mutedText,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        marginBottom: theme.spacing.sm,
+        paddingHorizontal: theme.spacing.xs,
+      },
+      tierCard: {
+        backgroundColor: theme.colors.surface,
+        borderWidth: 1,
+        borderColor: theme.colors.border,
+        borderRadius: 20,
+        padding: theme.spacing.lg,
+        marginBottom: theme.spacing.lg,
+        overflow: 'hidden',
+        ...theme.shadow('sm'),
+      },
+      tierHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: theme.spacing.sm,
+      },
+      tierIcon: {
+        fontSize: 32,
+        marginRight: theme.spacing.md,
+      },
+      tierName: {
+        fontSize: 20,
+        fontWeight: '700',
+        color: theme.colors.text,
+      },
+      tierTagline: {
+        fontSize: 14,
+        color: theme.colors.mutedText,
+        marginBottom: theme.spacing.xs,
+        lineHeight: 20,
+      },
+      tierPrice: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        marginBottom: theme.spacing.md,
+        gap: 4,
+      },
+      tierPriceAmount: {
+        fontSize: 28,
+        fontWeight: '700',
+        color: theme.colors.text,
+      },
+      tierPricePeriod: {
+        fontSize: 15,
+        color: theme.colors.mutedText,
+      },
+      featureRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        paddingVertical: theme.spacing.xs,
+        paddingRight: theme.spacing.sm,
+      },
+      featureIcon: {
+        fontSize: 18,
+        marginRight: theme.spacing.sm,
+        width: 24,
+        textAlign: 'center',
+      },
+      featureText: {
+        fontSize: 15,
+        color: theme.colors.text,
+        flex: 1,
+      },
+      plusBadge: {
+        alignSelf: 'flex-start',
+        paddingHorizontal: theme.spacing.sm,
+        paddingVertical: 2,
+        borderRadius: 8,
+        marginBottom: theme.spacing.sm,
+      },
+      subscribeButton: {
+        marginTop: theme.spacing.md,
+      },
+      autoRenewNote: {
+        marginTop: theme.spacing.lg,
+        paddingHorizontal: theme.spacing.md,
+        paddingVertical: theme.spacing.sm,
+        borderRadius: 12,
+        backgroundColor: theme.colors.border + '40',
+      },
+      autoRenewText: {
+        fontSize: 13,
+        color: theme.colors.mutedText,
+        textAlign: 'center',
+        lineHeight: 20,
+      },
+    });
+  }, [theme]);
+
+  const profile = useUserStore((s) => s.profile);
+  const error = useUserStore((s) => s.error);
+  const updateSubscription = useUserStore((s) => s.updateSubscription);
+  const [subscribing, setSubscribing] = React.useState<string | null>(null);
+
+  const handleSubscribe = async (tierId: 'vip' | 'vip_plus') => {
+    const tier = tierId === 'vip_plus' ? 'vip_plus' : 'vip';
+    const tierName = tierId === 'vip_plus' ? 'VIP Plus' : 'VIP';
+    setSubscribing(tierId);
+    try {
+      await updateSubscription(tier);
+      Alert.alert('Subscribed', `You're now on ${tierName}. Enjoy your benefits!`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
+      Alert.alert('Subscription failed', message);
+    } finally {
+      setSubscribing(null);
+    }
+  };
+
+  return (
+    <Screen>
+      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.hero}>
+          <AppText style={styles.crown}>👑</AppText>
+          <AppText style={styles.heroTitle}>VIP Subscription</AppText>
+          <AppText style={styles.heroSubtitle}>
+            Choose the tier that fits you. Unlock benefits and get more out of every event.
+          </AppText>
+        </View>
+
+        {error && (
+          <View style={{ marginBottom: theme.spacing.md, padding: theme.spacing.sm, borderRadius: 12, backgroundColor: theme.colors.danger + '20', borderWidth: 1, borderColor: theme.colors.danger + '50' }}>
+            <AppText style={{ color: theme.colors.danger, fontSize: 14 }}>{error}</AppText>
+          </View>
+        )}
+        <AppText style={styles.sectionLabel}>Plans</AppText>
+        {VIP_TIERS.map((tier) => (
+          <View key={tier.id} style={styles.tierCard}>
+            {tier.id === 'vip-plus' && (
+              <View style={[styles.plusBadge, { backgroundColor: tier.accentColor + '25' }]}>
+                <AppText style={{ fontSize: 12, fontWeight: '600', color: tier.accentColor }}>
+                  Most popular
+                </AppText>
+              </View>
+            )}
+            <View style={styles.tierHeader}>
+              <AppText style={styles.tierIcon}>{tier.icon}</AppText>
+              <AppText style={styles.tierName}>{tier.name}</AppText>
+            </View>
+            <AppText style={styles.tierTagline}>{tier.tagline}</AppText>
+            <View style={styles.tierPrice}>
+              <AppText style={styles.tierPriceAmount}>{tier.price} {tier.currency}</AppText>
+              <AppText style={styles.tierPricePeriod}>/ {tier.period}</AppText>
+            </View>
+            {tier.features.map((feature, index) => (
+              <View key={index} style={styles.featureRow}>
+                <AppText style={styles.featureIcon}>{feature.icon}</AppText>
+                <AppText style={styles.featureText}>{feature.text}</AppText>
+              </View>
+            ))}
+            {(() => {
+              const tierValue = tier.id === 'vip-plus' ? 'vip_plus' : 'vip';
+              const isCurrent = profile?.vipTier === tierValue;
+              const isSubscribing = subscribing === tier.id;
+              return (
+                <Button
+                  label={
+                    isCurrent ? 'Current plan' : isSubscribing ? 'Subscribing…' : 'Subscribe'
+                  }
+                  onPress={() => (isCurrent ? undefined : handleSubscribe(tierValue as 'vip' | 'vip_plus'))}
+                  variant={isCurrent ? 'secondary' : 'success'}
+                  style={styles.subscribeButton}
+                  disabled={isCurrent || subscribing !== null}
+                />
+              );
+            })()}
+          </View>
+        ))}
+        <View style={styles.autoRenewNote}>
+          <AppText style={styles.autoRenewText}>
+            Subscriptions auto-renew each {VIP_TIERS[0].period}. You can cancel anytime from your profile. Payment will be charged to your account at confirmation of purchase.
+          </AppText>
+        </View>
+      </ScrollView>
+    </Screen>
+  );
+};
