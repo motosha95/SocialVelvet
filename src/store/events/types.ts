@@ -12,7 +12,7 @@ export interface EventsActions {
   fetchEvents: () => Promise<void>;
   loadMoreEvents: () => Promise<void>;
   refreshEvents: () => Promise<void>;
-  joinEvent: (eventId: string) => Promise<void>;
+  joinEvent: (eventId: string, paymentMethod?: 'points' | 'cash' | 'credit_card', pointsAmount?: number, paymentIntentId?: string) => Promise<void>;
   leaveEvent: (eventId: string) => Promise<void>;
   addEvent: (event: Event) => void;
   updateEvent: (event: Event) => void;

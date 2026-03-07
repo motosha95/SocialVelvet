@@ -4,6 +4,7 @@ import { generateSeriesDates, type SeriesInterval } from '../utils/seriesUtils';
 import { followsService } from './follows';
 import { challengesService } from './challenges';
 import { calculatePointsForAttendance, getEffectivePriceForPoints, applyVipPointsMultiplier } from '../constants/gamification';
+import { stripeService } from './stripeService';
 
 export const eventsService = {
   /**
@@ -489,13 +490,42 @@ export const eventsService = {
   },
 
   /**
+   * Create a Stripe Payment Intent for joining a paid event. Returns clientSecret for the client to confirm payment.
+   */
+  createPaymentIntentForEvent: async (
+    eventId: string,
+    userId: string,
+    pointsAmount?: number
+  ): Promise<{ clientSecret: string; paymentIntentId: string } | null> => {
+    const event = await prisma.event.findUnique({
+      where: { id: eventId },
+      include: { attendees: true },
+    });
+    if (!event) throw new Error('Event not found');
+    if (!event.isPaid) throw new Error('Event is not a paid event');
+    const basePrice = event.pricingTiers && Array.isArray(event.pricingTiers) && (event.pricingTiers as Array<{ name: string; price: number }>).length > 0
+      ? (event.pricingTiers as Array<{ name: string; price: number }>)[0].price
+      : (event.price != null ? Number(event.price) : 0);
+    if (basePrice <= 0) throw new Error('Invalid event price');
+    const currency = (event.currency || 'AED').toUpperCase();
+    return stripeService.createEventPaymentIntent({
+      eventId,
+      userId,
+      amountMajor: basePrice,
+      currency,
+      pointsAmount: pointsAmount ?? 0,
+    });
+  },
+
+  /**
    * Join event with payment method support
    */
   joinEvent: async (
     eventId: string,
     userId: string,
     paymentMethod?: 'points' | 'cash' | 'credit_card',
-    pointsAmount?: number
+    pointsAmount?: number,
+    paymentIntentId?: string
   ): Promise<void> => {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
@@ -593,11 +623,26 @@ export const eventsService = {
         paymentData.paymentMethod = 'cash';
         paymentData.cashPrice = cashPrice;
       } else {
-        // Credit card payment (base price)
+        // Credit card: require successful Stripe Payment Intent
+        if (!paymentIntentId) {
+          throw new Error('Card payment requires completing payment first. Please try again.');
+        }
+        const verified = await stripeService.verifyEventPaymentIntent(paymentIntentId, eventId, userId);
+        if (!verified) {
+          throw new Error('Stripe payment verification failed. Please complete payment and try again.');
+        }
         paymentData.paymentMethod = 'credit_card';
-        paymentData.creditCardPrice = basePrice;
-        // In a real app, you would integrate with a payment gateway here
-        // For now, we just record the amount
+        paymentData.creditCardPrice = verified.amountPaidMajor;
+        if (pointsAmount != null && pointsAmount > 0) {
+          if (pointsAmount > userPoints) {
+            throw new Error(`Insufficient points. You have ${userPoints} points.`);
+          }
+          await prisma.user.update({
+            where: { id: userId },
+            data: { points: { decrement: pointsAmount } },
+          });
+          paymentData.pointsUsed = pointsAmount;
+        }
       }
     }
 

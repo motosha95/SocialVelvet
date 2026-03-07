@@ -30,6 +30,8 @@ import { useUserStore } from '../../../store/user/userStore';
 import { UserNameWithBadge } from '../../../components/ui/UserNameWithBadge';
 import { PaymentMethodSelector } from '../components/PaymentMethodSelector';
 import type { PaymentMethod } from '../types/payment';
+import { useStripe } from '@stripe/stripe-react-native';
+import { getEventPrice } from '../utils/paymentUtils';
 
 type Props = CompositeScreenProps<NativeStackScreenProps<EventsStackParamList, typeof Routes.Events.Details>, BottomTabScreenProps<AppTabsParamList>>;
 
@@ -68,6 +70,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
   const [isCancelling, setIsCancelling] = React.useState<boolean>(false);
   const [paymentModalVisible, setPaymentModalVisible] = React.useState<boolean>(false);
   const lastApiUpdateRef = React.useRef<number>(0);
+  const { initPaymentSheet, presentPaymentSheet } = useStripe();
   const updateEvent = useEventsStore((s) => s.updateEvent);
   const removeEvent = useEventsStore((s) => s.removeEvent);
   const removeEventsBySeriesId = useEventsStore((s) => s.removeEventsBySeriesId);
@@ -468,7 +471,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
   }, [events, eventId, event, isJoining, isLeaving]);
 
-  const handleJoin = async (paymentMethod?: PaymentMethod, pointsAmount?: number): Promise<void> => {
+  const handleJoin = async (paymentMethod?: PaymentMethod, pointsAmount?: number, paymentIntentId?: string): Promise<void> => {
     setIsJoining(true);
     setError(null);
 
@@ -489,7 +492,7 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
     }
 
     try {
-      await joinEvent(eventId, paymentMethod, pointsAmount);
+      await joinEvent(eventId, paymentMethod, pointsAmount, paymentIntentId);
       // Wait a bit for backend to process, then refresh event data
       // This prevents getting stale data from the backend
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1497,6 +1500,53 @@ export const EventDetailsScreen = ({ route, navigation }: Props): React.JSX.Elem
                   availablePoints={profile?.points || 0}
                   onConfirm={async (method, pointsAmount) => {
                     setPaymentModalVisible(false);
+                    if (method === 'credit_card') {
+                      try {
+                        setIsJoining(true);
+                        setError(null);
+                        const { clientSecret, paymentIntentId } = await eventsApi.createPaymentIntent(eventId, undefined);
+                        await initPaymentSheet({
+                          paymentIntentClientSecret: clientSecret,
+                          merchantDisplayName: 'Social Velvet',
+                        });
+                        const { error: sheetError } = await presentPaymentSheet();
+                        if (sheetError) {
+                          setError(sheetError.message ?? 'Payment was cancelled');
+                          setIsJoining(false);
+                          return;
+                        }
+                        await handleJoin('credit_card', undefined, paymentIntentId);
+                      } catch (err) {
+                        setError(err instanceof Error ? err.message : 'Card payment failed');
+                        setIsJoining(false);
+                      }
+                      return;
+                    }
+                    if (method === 'points' && event && pointsAmount != null && pointsAmount > 0) {
+                      const basePrice = getEventPrice(event.price, event.pricingTiers);
+                      if (basePrice > 0 && pointsAmount < basePrice) {
+                        try {
+                          setIsJoining(true);
+                          setError(null);
+                          const { clientSecret, paymentIntentId } = await eventsApi.createPaymentIntent(eventId, pointsAmount);
+                          await initPaymentSheet({
+                            paymentIntentClientSecret: clientSecret,
+                            merchantDisplayName: 'Social Velvet',
+                          });
+                          const { error: sheetError } = await presentPaymentSheet();
+                          if (sheetError) {
+                            setError(sheetError.message ?? 'Payment was cancelled');
+                            setIsJoining(false);
+                            return;
+                          }
+                          await handleJoin('credit_card', pointsAmount, paymentIntentId);
+                        } catch (err) {
+                          setError(err instanceof Error ? err.message : 'Card payment failed');
+                          setIsJoining(false);
+                        }
+                        return;
+                      }
+                    }
                     await handleJoin(method, pointsAmount);
                   }}
                   onCancel={() => setPaymentModalVisible(false)}

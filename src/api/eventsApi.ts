@@ -71,20 +71,39 @@ export const eventsApi = {
   join: async (
     eventId: string,
     paymentMethod?: 'points' | 'cash' | 'credit_card',
-    pointsAmount?: number
+    pointsAmount?: number,
+    paymentIntentId?: string
   ): Promise<void> => {
     const token = getAuthToken();
     if (!token) {
       throw new Error('Authentication required to join events');
     }
-    const body: { paymentMethod?: string; pointsAmount?: number } = {};
+    const body: { paymentMethod?: string; pointsAmount?: number; paymentIntentId?: string } = {};
     if (paymentMethod) {
       body.paymentMethod = paymentMethod;
     }
     if (pointsAmount !== undefined) {
       body.pointsAmount = pointsAmount;
     }
+    if (paymentIntentId) {
+      body.paymentIntentId = paymentIntentId;
+    }
     await apiClient.post(`/events/${eventId}/join`, body, token);
+  },
+
+  createPaymentIntent: async (
+    eventId: string,
+    pointsAmount?: number
+  ): Promise<{ clientSecret: string; paymentIntentId: string }> => {
+    const token = getAuthToken();
+    if (!token) {
+      throw new Error('Authentication required');
+    }
+    return await apiClient.post<{ clientSecret: string; paymentIntentId: string }>(
+      `/events/${eventId}/create-payment-intent`,
+      pointsAmount != null ? { pointsAmount } : {},
+      token
+    );
   },
 
   leave: async (eventId: string): Promise<void> => {

@@ -34,9 +34,18 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECORD_AUDIO"
       ],
-      "usesCleartextTraffic": true
+      "usesCleartextTraffic": true,
+      "package": "com.tosha95sorganization.socializng"
     },
     "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "2.0.21"
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {
@@ -44,7 +53,13 @@
           "cameraPermission": "The app needs access to your camera to take photos."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "@stripe/stripe-react-native/app.plugin.js",
+        {
+          "enableGooglePay": true
+        }
+      ]
     ],
     "extra": {
       "eas": {

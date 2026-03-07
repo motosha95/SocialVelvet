@@ -4,6 +4,7 @@ import { authenticate, optionalAuthenticate, type AuthRequest } from '../middlew
 import { AppError } from '../middleware/errorHandler';
 import { validateTopics } from '../constants/topics';
 import { eventsService } from '../services/events';
+import { stripeService } from '../services/stripeService';
 
 export const eventsRouter = express.Router();
 
@@ -77,6 +78,11 @@ const cancelEventSchema = z.object({
 const joinEventSchema = z.object({
   paymentMethod: z.enum(['points', 'cash', 'credit_card']).optional(),
   pointsAmount: z.number().positive().optional(),
+  paymentIntentId: z.string().min(1).optional(),
+});
+
+const createPaymentIntentSchema = z.object({
+  pointsAmount: z.union([z.number(), z.string()]).optional().transform((v) => (v === undefined || v === '' ? undefined : Number(v))),
 });
 
 // Get all events (public, but includes isJoined if authenticated). ?prioritizeFollowed=true puts events from followed hosts first.
@@ -177,7 +183,8 @@ eventsRouter.post('/:id/join', authenticate, async (req: AuthRequest, res, next)
       req.params.id,
       req.userId,
       body.paymentMethod,
-      body.pointsAmount
+      body.pointsAmount,
+      body.paymentIntentId
     );
     res.status(204).send();
   } catch (err) {
@@ -185,11 +192,55 @@ eventsRouter.post('/:id/join', authenticate, async (req: AuthRequest, res, next)
       next(new AppError(404, err.message));
       return;
     }
-    if (err instanceof Error && (err.message === 'Event is full' || err.message.includes('payment') || err.message.includes('points'))) {
+    if (err instanceof Error && (err.message === 'Event is full' || err.message.includes('payment') || err.message.includes('points') || err.message.includes('Stripe'))) {
       next(new AppError(400, err.message));
       return;
     }
     next(err);
+  }
+});
+
+// Create Stripe Payment Intent for event (requires auth). Call before showing payment sheet for card payment.
+eventsRouter.post('/:id/create-payment-intent', authenticate, async (req: AuthRequest, res, next) => {
+  try {
+    if (!req.userId) {
+      throw new AppError(401, 'Authentication required');
+    }
+    const eventId = req.params.id;
+    const body = createPaymentIntentSchema.parse(req.body || {});
+    const pointsAmount = body.pointsAmount != null && Number.isFinite(body.pointsAmount) ? body.pointsAmount : undefined;
+    const result = await eventsService.createPaymentIntentForEvent(eventId, req.userId, pointsAmount);
+    if (!result) {
+      throw new AppError(
+        503,
+        'Card payment is not configured. Add STRIPE_SECRET_KEY to the backend .env file, or use Cash/Points.'
+      );
+    }
+    res.json(result);
+  } catch (err) {
+    if (err instanceof AppError) throw err;
+    if (err instanceof Error && err.message === 'Event not found') {
+      next(new AppError(404, err.message));
+      return;
+    }
+    if (err instanceof Error && (err.message.includes('price') || err.message.includes('paid'))) {
+      next(new AppError(400, err.message));
+      return;
+    }
+    // Log and return a clear 503 so user can try Cash/Points
+    const errMessage = err instanceof Error ? err.message : String(err);
+    console.error('[create-payment-intent]', errMessage);
+    const isStripeError =
+      errMessage.startsWith('Stripe:') ||
+      /invalid.*key|api key|authentication|no such token/i.test(errMessage);
+    next(
+      new AppError(
+        503,
+        isStripeError
+          ? 'Card payment failed. Add STRIPE_SECRET_KEY to backend .env (get it from dashboard.stripe.com/apikeys).'
+          : 'Card payment is temporarily unavailable. Please try Cash or Points, or try again later.'
+      )
+    );
   }
 });
 

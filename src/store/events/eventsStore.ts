@@ -81,10 +81,11 @@ export const useEventsStore = create<EventsStore>((set, get) => ({
   joinEvent: async (
     eventId: string,
     paymentMethod?: 'points' | 'cash' | 'credit_card',
-    pointsAmount?: number
+    pointsAmount?: number,
+    paymentIntentId?: string
   ) => {
     try {
-      await eventsApi.join(eventId, paymentMethod, pointsAmount);
+      await eventsApi.join(eventId, paymentMethod, pointsAmount, paymentIntentId);
       // Optimistically update the store, but the UI will refresh from API for accuracy
       const events = get().events.map((event) =>
         event.id === eventId
